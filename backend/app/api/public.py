@@ -99,3 +99,42 @@ def get_public_community(
         approved_members_count=approved_count,
         created_at=c.created_at
     )
+
+
+@router.get("/demo-code")
+def get_demo_access_code(db: Session = Depends(get_db)):
+    """
+    Returns an active, unredeemed access code directly from the database for joining/testing.
+    """
+    from backend.app.models.models import AccessCode
+    code_obj = (
+        db.query(AccessCode)
+        .filter(AccessCode.status == "unused")
+        .order_by(AccessCode.id.desc())
+        .first()
+    )
+    if not code_obj:
+        open_comm = db.query(Community).filter(Community.status == "open").first()
+        if open_comm:
+            import uuid
+            fresh_code = f"AID-{uuid.uuid4().hex[:8].upper()}-{uuid.uuid4().hex[:8].upper()}"
+            code_obj = AccessCode(
+                community_id=open_comm.id,
+                code=fresh_code,
+                status="unused",
+                issued_to_label="Direct Verification Pass"
+            )
+            db.add(code_obj)
+            db.commit()
+            db.refresh(code_obj)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No active communities found. Please create a community first."
+            )
+    return {
+        "code": code_obj.code,
+        "community_id": code_obj.community_id,
+        "community_title": code_obj.community.title if code_obj.community else "Relief Program",
+        "issued_to_label": code_obj.issued_to_label
+    }

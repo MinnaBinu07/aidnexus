@@ -103,7 +103,9 @@ export default function PublicCommunities() {
                   {currentNavScope === 'my' ? 'My Membership Status' : 'Public Verification Status'}
                 </span>
                 <span className="font-code text-xs text-[#5c0427] font-bold">
-                  {currentNavScope === 'my' ? '1 Active Affiliation' : 'Decentralized Direct Triage'}
+                  {currentNavScope === 'my'
+                    ? `${filteredCommunities.length} Active Affiliation${filteredCommunities.length === 1 ? '' : 's'}`
+                    : 'Decentralized Direct Triage'}
                 </span>
               </div>
             </div>
@@ -350,7 +352,7 @@ export default function PublicCommunities() {
                   Reset filters
                 </button>
                 <Link
-                  to="/"
+                  to="/?action=create"
                   className="h-12 px-8 rounded-full bg-[#7a1f3d] hover:bg-[#5c0427] text-white font-body text-sm font-bold shadow-xs transition-all flex items-center gap-2"
                 >
                   <span className="material-symbols-outlined text-[18px]">add_circle</span>
@@ -427,7 +429,6 @@ export default function PublicCommunities() {
                   <span className="px-3 py-1 rounded-full bg-[#F6E3E8] text-[#5c0427] font-body font-bold flex items-center gap-1">
                     <span className="material-symbols-outlined text-[14px]">verified</span> Verified Community
                   </span>
-                  <span className="font-body text-[#554245]">• Civil Defense Tier A</span>
                 </div>
               </div>
 
@@ -444,8 +445,10 @@ export default function PublicCommunities() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs font-body">
-                  <span className="text-[#554245]">Audit Validation:</span>
-                  <span className="font-code text-xs text-[#0b1c30] font-bold">100% Conformance</span>
+                  <span className="text-[#554245]">Verification Status:</span>
+                  <span className="font-code text-xs text-[#0b1c30] font-bold">
+                    {drawerCommunity.is_verified_admin ? 'Verified Coordinator' : 'Registered Relief Grid'}
+                  </span>
                 </div>
               </div>
 

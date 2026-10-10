@@ -11,3 +11,8 @@ export const getPublicCommunity = async (id) => {
   const response = await api.get(`/public/communities/${id}`);
   return response.data;
 };
+
+export const getActiveDemoCode = async () => {
+  const response = await api.get('/public/demo-code');
+  return response.data;
+};
