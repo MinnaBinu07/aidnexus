@@ -64,7 +64,7 @@ export default function PublicCommunityDetail() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="font-code text-xs font-bold text-[#7a1f3d]">
-                #AN-2025-0{community.id}-K
+                #{community.code || `REF-${community.id}`}
               </span>
               <span className="font-body text-xs font-bold uppercase tracking-wider text-[#554245]">
                 Verified Relief Program

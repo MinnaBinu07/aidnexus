@@ -215,7 +215,7 @@ export default function PublicCommunities() {
                     <div className="flex flex-col">
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className="font-code text-xs text-[#7a1f3d] font-semibold tracking-tight">
-                          #AN-2025-0{comm.id}-K
+                          #{comm.code || `REF-${comm.id}`}
                         </span>
                         {comm.is_verified_admin && (
                           <span className="px-2.5 py-0.5 rounded-full bg-[#7a1f3d] text-white font-code text-[11px] flex items-center gap-1 font-semibold shadow-xs">
@@ -232,7 +232,7 @@ export default function PublicCommunities() {
                     <div className="shrink-0 px-3.5 py-1.5 rounded-full bg-[#F6E3E8] text-[#5c0427] flex items-center gap-1.5 shadow-xs">
                       <span className="material-symbols-outlined text-[16px]">verified</span>
                       <span className="font-body text-xs font-bold">
-                        {comm.is_verified_admin ? `Verified admin: ADM-0${comm.id}` : 'Civil Registry'}
+                        {comm.is_verified_admin ? `Verified Coordinator` : 'Civil Registry'}
                       </span>
                     </div>
                   </div>
@@ -241,7 +241,7 @@ export default function PublicCommunities() {
                   <div className="flex items-center gap-4 mt-4 pt-1 bg-[#eff4ff]/60 rounded-xl p-3 border border-[#dac0c4]/20">
                     <div className="flex items-center gap-1 text-[#554245]">
                       <span className="material-symbols-outlined text-[18px]">location_on</span>
-                      <span className="font-body text-xs font-medium">Relief Sector {comm.id}</span>
+                      <span className="font-body text-xs font-medium">{comm.title}</span>
                     </div>
                     <span className="text-[#554245]/40">•</span>
                     <div className="flex items-center gap-1 text-[#554245]">
@@ -272,8 +272,8 @@ export default function PublicCommunities() {
                       <span className="flex items-center gap-1.5 font-medium">
                         <span className="material-symbols-outlined text-[16px]">crisis_alert</span> Primary Need
                       </span>
-                      <span className="font-body text-xs font-semibold text-[#0b1c30]">
-                        Emergency Shelter & Aid Dispatches
+                      <span className="font-body text-xs font-semibold text-[#0b1c30] truncate max-w-[220px]">
+                        {comm.description ? (comm.description.length > 50 ? comm.description.slice(0, 48) + '...' : comm.description) : 'Active Field Triage'}
                       </span>
                     </div>
                   </div>
@@ -412,7 +412,7 @@ export default function PublicCommunities() {
               <div className="space-y-1 mb-6">
                 <div className="flex items-center gap-2">
                   <span className="font-code text-xs text-[#7a1f3d] font-bold">
-                    #AN-2025-0{drawerCommunity.id}-K
+                    #{drawerCommunity.code || `REF-${drawerCommunity.id}`}
                   </span>
                   {drawerCommunity.is_verified_admin && (
                     <span className="px-2 py-0.5 rounded-full bg-[#7a1f3d] text-white font-code text-[11px] font-bold">
@@ -456,7 +456,7 @@ export default function PublicCommunities() {
                 </h3>
                 <div className="bg-[#eff4ff]/60 rounded-2xl p-4 border border-[#dac0c4]/30">
                   <p className="font-body text-sm text-[#0b1c30] leading-relaxed italic">
-                    "{drawerCommunity.description || 'Rapid response coordination center for evacuated households. Coordinates direct supplies and medical evacuation.'}"
+                    "{drawerCommunity.description || 'No operational description provided.'}"
                   </p>
                 </div>
               </div>

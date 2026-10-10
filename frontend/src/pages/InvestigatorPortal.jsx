@@ -247,7 +247,7 @@ export default function InvestigatorPortal() {
                           type="checkbox"
                           className="w-4 h-4 rounded accent-[#B02A52] bg-[#000000]"
                         />
-                        <span>Include Archive Nodes (2018-2026)</span>
+                        <span>Include Historical Claim Archives</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input

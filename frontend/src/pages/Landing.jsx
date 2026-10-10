@@ -10,15 +10,13 @@ export default function Landing() {
   // Create Community Wizard Modal State
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
-  const [commTitle, setCommTitle] = useState('Coastal Relief Scheme 2026');
-  const [commDesc, setCommDesc] = useState(
-    'Providing emergency shelter, direct aid, and rehabilitation funds for households displaced by coastal flooding.'
-  );
+  const [commTitle, setCommTitle] = useState('');
+  const [commDesc, setCommDesc] = useState('');
   const [commRegion, setCommRegion] = useState('Alappuzha (Kuttanad / Coastal Flood Belt)');
-  const [disasterDate, setDisasterDate] = useState('12 / 04 / 2025');
-  const [adminName, setAdminName] = useState(user?.name || 'Meghana Manoj');
-  const [adminPos, setAdminPos] = useState('Relief Coordinator');
-  const [payeeName, setPayeeName] = useState('Relief Fund (Kerala Dist)');
+  const [disasterDate, setDisasterDate] = useState('');
+  const [adminName, setAdminName] = useState(user?.name || '');
+  const [adminPos, setAdminPos] = useState('');
+  const [payeeName, setPayeeName] = useState('');
   const [createdCodes, setCreatedCodes] = useState([]);
   const [creating, setCreating] = useState(false);
   const [createdCommunityId, setCreatedCommunityId] = useState(null);
@@ -291,6 +289,7 @@ export default function Landing() {
                       type="text"
                       value={adminName}
                       onChange={(e) => setAdminName(e.target.value)}
+                      placeholder="e.g. Maya Varma"
                       className="w-full h-11 px-3.5 rounded-xl border border-[#dac0c4] font-body text-xs text-[#0b1c30] bg-[#ffffff] focus:outline-none focus:border-[#7a1f3d]"
                     />
                   </div>
@@ -300,6 +299,7 @@ export default function Landing() {
                       type="text"
                       value={adminPos}
                       onChange={(e) => setAdminPos(e.target.value)}
+                      placeholder="e.g. Lead District Officer / Relief Coordinator"
                       className="w-full h-11 px-3.5 rounded-xl border border-[#dac0c4] font-body text-xs text-[#0b1c30] bg-[#ffffff] focus:outline-none focus:border-[#7a1f3d]"
                     />
                   </div>
@@ -327,6 +327,7 @@ export default function Landing() {
                       type="text"
                       value={commTitle}
                       onChange={(e) => setCommTitle(e.target.value)}
+                      placeholder="e.g. Coastal Ward 12 Shelter Hub"
                       className="w-full h-11 px-3.5 rounded-xl border border-[#dac0c4] font-body text-xs text-[#0b1c30] bg-[#ffffff] focus:outline-none focus:border-[#7a1f3d]"
                     />
                   </div>
@@ -336,6 +337,7 @@ export default function Landing() {
                       rows={3}
                       value={commDesc}
                       onChange={(e) => setCommDesc(e.target.value)}
+                      placeholder="State operational mandate, incident context, and target households..."
                       className="w-full p-3 rounded-xl border border-[#dac0c4] font-body text-xs text-[#0b1c30] bg-[#ffffff] focus:outline-none focus:border-[#7a1f3d]"
                     />
                   </div>
@@ -362,6 +364,7 @@ export default function Landing() {
                         type="text"
                         value={disasterDate}
                         onChange={(e) => setDisasterDate(e.target.value)}
+                        placeholder="DD / MM / YYYY"
                         className="w-full h-11 px-3.5 rounded-xl border border-[#dac0c4] font-code text-xs text-[#0b1c30] bg-[#ffffff]"
                       />
                     </div>

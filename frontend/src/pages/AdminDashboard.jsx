@@ -35,7 +35,7 @@ export default function AdminDashboard() {
   const [networkModalData, setNetworkModalData] = useState(null);
   const [isAccessCodeModalOpen, setIsAccessCodeModalOpen] = useState(false);
   const [codeQty, setCodeQty] = useState(25);
-  const [codeBatchTarget, setCodeBatchTarget] = useState('Coastal Fishery Zone');
+  const [codeBatchTarget, setCodeBatchTarget] = useState('');
   const [generatedCodesList, setGeneratedCodesList] = useState([]);
 
   // 1. Initial Load Communities
@@ -151,7 +151,7 @@ export default function AdminDashboard() {
                 {/* Role access indicator */}
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#f1dee3] text-[#6f6165] font-body text-xs font-semibold">
                   <span className="material-symbols-outlined text-[16px] text-[#7a1f3d]">shield_person</span>
-                  Verified admin: <span className="font-code text-xs font-bold text-[#5c0427]">ADM-0{selectedCommunityId}</span>
+                  Verified coordinator: <span className="font-code text-xs font-bold text-[#5c0427]">{currentCommunity.admin_name || user?.name || 'Administrator'}</span>
                 </span>
                 {/* Community Selector Pill */}
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#eff4ff] text-[#0b1c30] font-body text-xs font-semibold border border-[#dac0c4]/40">
@@ -179,9 +179,12 @@ export default function AdminDashboard() {
               </h1>
               <p className="font-body text-sm text-[#554245] flex items-center gap-2 mt-1">
                 <span>Coordinator:</span>
-                <strong className="font-bold text-[#0b1c30]">{currentCommunity.admin_name || 'Designated Lead'}</strong>
+                <strong className="font-bold text-[#0b1c30]">{currentCommunity.admin_name || user?.name || 'Designated Lead'}</strong>
                 <span className="text-[#dac0c4]">•</span>
-                <span className="font-code text-xs text-[#554245]">LATENCY: 14ms</span>
+                <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-code text-[11px] font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                  Live
+                </span>
                 <span className="text-[#dac0c4]">•</span>
                 <button
                   onClick={loadCommunityData}
@@ -373,7 +376,9 @@ export default function AdminDashboard() {
                         Live clusters: {queue.length}
                       </span>
                     </div>
-                    <span className="font-code text-xs text-[#554245]">Cluster Hash: SHA256-AN-RELIEF</span>
+                    <span className="font-code text-xs text-[#554245]">
+                      {queue.length > 0 ? `Component #${queue[0].component_id}` : 'Queue Synced'}
+                    </span>
                   </div>
 
                   <div className="overflow-x-auto w-full">

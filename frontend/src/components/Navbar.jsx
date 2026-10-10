@@ -393,21 +393,21 @@ export default function Navbar() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between pt-1">
-                  <a className="font-headline text-2xl text-[#5c0427] tracking-tight font-bold hover:underline" href="tel:1234567890">
-                    1234567890
+                  <a className="font-headline text-2xl text-[#5c0427] tracking-tight font-bold hover:underline" href={`tel:${import.meta.env.VITE_HOTLINE_PHONE || '1070'}`}>
+                    {import.meta.env.VITE_HOTLINE_PHONE || '1070 (Toll-Free)'}
                   </a>
                   <div className="flex items-center gap-2">
                     <a
                       className="h-8 px-3 rounded-full bg-[#7a1f3d] hover:bg-[#5c0427] text-white font-body text-xs font-semibold transition-colors flex items-center gap-1 shadow-xs"
-                      href="tel:1234567890"
+                      href={`tel:${import.meta.env.VITE_HOTLINE_PHONE || '1070'}`}
                     >
                       <span className="material-symbols-outlined text-[14px]">call</span>
                       <span>Call</span>
                     </a>
                     <button
-                      className="h-8 px-2.5 rounded-full bg-[#dce9ff] hover:bg-[#d3e4fe] text-[#0b1c30] font-body text-xs transition-colors flex items-center gap-1"
+                      className="h-8 px-2.5 rounded-full bg-[#dce9ff] hover:bg-[#d3e4fe] text-[#0b1c30] font-body text-xs transition-colors flex items-center gap-1 cursor-pointer"
                       onClick={() => {
-                        navigator.clipboard.writeText('1234567890');
+                        navigator.clipboard.writeText(import.meta.env.VITE_HOTLINE_PHONE || '1070');
                         alert('Hotline copied to clipboard!');
                       }}
                       type="button"
@@ -429,21 +429,21 @@ export default function Navbar() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between pt-1">
-                  <a className="font-body text-sm text-[#5c0427] font-bold hover:underline break-all" href="mailto:aidnexus@gmail.com">
-                    aidnexus@gmail.com
+                  <a className="font-body text-sm text-[#5c0427] font-bold hover:underline break-all" href={`mailto:${import.meta.env.VITE_CONTACT_EMAIL || 'support@aidnexus.org'}`}>
+                    {import.meta.env.VITE_CONTACT_EMAIL || 'support@aidnexus.org'}
                   </a>
                   <div className="flex items-center gap-2">
                     <a
                       className="h-8 px-3 rounded-full bg-[#7a1f3d] hover:bg-[#5c0427] text-white font-body text-xs font-semibold transition-colors flex items-center gap-1 shadow-xs"
-                      href="mailto:aidnexus@gmail.com"
+                      href={`mailto:${import.meta.env.VITE_CONTACT_EMAIL || 'support@aidnexus.org'}`}
                     >
                       <span className="material-symbols-outlined text-[14px]">mail</span>
                       <span>Email</span>
                     </a>
                     <button
-                      className="h-8 px-2.5 rounded-full bg-[#dce9ff] hover:bg-[#d3e4fe] text-[#0b1c30] font-body text-xs transition-colors flex items-center gap-1"
+                      className="h-8 px-2.5 rounded-full bg-[#dce9ff] hover:bg-[#d3e4fe] text-[#0b1c30] font-body text-xs transition-colors flex items-center gap-1 cursor-pointer"
                       onClick={() => {
-                        navigator.clipboard.writeText('aidnexus@gmail.com');
+                        navigator.clipboard.writeText(import.meta.env.VITE_CONTACT_EMAIL || 'support@aidnexus.org');
                         alert('Email copied to clipboard!');
                       }}
                       type="button"

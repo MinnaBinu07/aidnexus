@@ -56,7 +56,7 @@ export const Login = () => {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="worker@relief.gov.in"
+              placeholder="name@organization.org"
               className="w-full px-4 h-11 text-sm bg-[#eff4ff] border border-[#dac0c4]/40 rounded-2xl text-[#0b1c30] focus:outline-none focus:border-[#7a1f3d]"
             />
           </div>

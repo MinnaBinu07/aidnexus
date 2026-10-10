@@ -14,17 +14,17 @@ export default function MemberJoin() {
   const [currentStep, setCurrentStep] = useState('step-a');
 
   // Step A: Code Entry
-  const [code, setCode] = useState(urlCode || 'CN-7F3K-2Q9P');
+  const [code, setCode] = useState(urlCode || '');
   const [validating, setValidating] = useState(false);
   const [communityData, setCommunityData] = useState(null);
   const [validationError, setValidationError] = useState(null);
 
   // Step B: Credentials (if guest) & Consent
-  const [memberName, setMemberName] = useState('');
-  const [memberEmail, setMemberEmail] = useState('you@gmail.com');
-  const [memberPassword, setMemberPassword] = useState('ReliefPass123!');
-  const [memberPhone, setMemberPhone] = useState('+91 98765 43210');
-  const [consentChecked, setConsentChecked] = useState(true);
+  const [memberName, setMemberName] = useState(user?.name || '');
+  const [memberEmail, setMemberEmail] = useState(user?.email || '');
+  const [memberPassword, setMemberPassword] = useState('');
+  const [memberPhone, setMemberPhone] = useState('');
+  const [consentChecked, setConsentChecked] = useState(false);
 
   // Step C: Dynamic Field Values & Files
   const [formValues, setFormValues] = useState({});
@@ -252,9 +252,8 @@ export default function MemberJoin() {
               <div>
                 <input
                   type="email"
-                  defaultValue="you@gmail.com"
                   className="w-full h-12 px-4 rounded-2xl border border-[#dac0c4]/60 font-body text-sm text-[#0b1c30] bg-white focus:outline-none focus:border-[#7a1f3d] focus:ring-2 focus:ring-[#7a1f3d]/20 transition-all"
-                  placeholder="you@gmail.com"
+                  placeholder="Enter your email to receive direct relief updates"
                 />
               </div>
 
@@ -310,8 +309,7 @@ export default function MemberJoin() {
                       Coordinator
                     </span>
                     <span className="text-sm font-bold text-[#0b1c30]">
-                      {communityData?.admin_name || 'Meghana Manoj'}{' '}
-                      <span className="font-normal text-xs text-[#554245]">(Relief Coordinator)</span>
+                      {communityData?.admin_name || 'Designated Relief Coordinator'}
                     </span>
                   </div>
                 </div>
@@ -327,7 +325,7 @@ export default function MemberJoin() {
                       Community
                     </span>
                     <span className="text-sm font-bold text-[#0b1c30]">
-                      {communityData?.community_title || 'Coastal Relief'}
+                      {communityData?.community_title || 'Disaster Relief Jurisdiction'}
                     </span>
                   </div>
                 </div>
@@ -533,7 +531,7 @@ export default function MemberJoin() {
               <div className="w-full mt-5 p-3 rounded-xl bg-[#eff4ff] text-left font-code text-xs space-y-1 text-[#554245]">
                 <div className="flex justify-between">
                   <span>Claim Reference:</span>
-                  <strong className="text-[#7a1f3d]">#{submitSuccess?.submission_id || '982'}</strong>
+                  <strong className="text-[#7a1f3d]">#{submitSuccess?.submission_id || 'PENDING'}</strong>
                 </div>
                 <div className="flex justify-between">
                   <span>Integrity Protocol:</span>
