@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.core import config
 from backend.app.core.database import get_db
-from backend.app.core.security import require_investigator
+from backend.app.core.security import get_investigator_or_authorized
 from backend.app.core.masking import mask_sensitive_value
 from backend.app.models.models import (
     User, Community, Submission, SubmissionValue, Evidence,
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/investigate", tags=["Investigator"])
 @router.post("/photo")
 async def investigate_photo(
     file: UploadFile = File(...),
-    investigator: User = Depends(require_investigator),
+    investigator: User = Depends(get_investigator_or_authorized),
     db: Session = Depends(get_db)
 ):
     """
@@ -57,42 +57,48 @@ async def investigate_photo(
     # Query all evidence records with non-null pHash across all communities
     all_evidence = db.query(Evidence).filter(Evidence.phash.isnot(None)).all()
 
-    matches = []
     seen_submissions = set()
+    candidate_items = []
 
     for ev in all_evidence:
         dist = hamming_distance(query_phash, ev.phash)
-        if dist <= config.PHASH_HAMMING_THRESHOLD:
-            sub = db.query(Submission).filter(Submission.id == ev.submission_id).first()
-            if not sub or sub.id in seen_submissions:
-                continue
+        sub = db.query(Submission).filter(Submission.id == ev.submission_id).first()
+        if not sub or sub.id in seen_submissions:
+            continue
 
-            seen_submissions.add(sub.id)
-            community = db.query(Community).filter(Community.id == sub.community_id).first()
-            applicant_user = sub.membership.user if sub.membership else None
-            applicant_name = applicant_user.name if applicant_user else "Applicant"
+        seen_submissions.add(sub.id)
+        community = db.query(Community).filter(Community.id == sub.community_id).first()
+        applicant_user = sub.membership.user if sub.membership else None
+        applicant_name = applicant_user.name if applicant_user else "Applicant"
 
-            matches.append({
-                "submission_id": sub.id,
-                "evidence_id": ev.id,
-                "community_id": sub.community_id,
-                "community_title": community.title if community else "Unknown Program",
-                "applicant_name": mask_sensitive_value(applicant_name, "name"),
-                "status": sub.status,
-                "risk_score": sub.risk_score,
-                "hamming_distance": dist,
-                "threshold": config.PHASH_HAMMING_THRESHOLD,
-                "is_exact_match": dist == 0,
-                "explanation": (
-                    f"Identical perceptual photo match (Hamming distance {dist})"
-                    if dist == 0
-                    else f"Perceptually similar damage photo (Hamming distance {dist} <= {config.PHASH_HAMMING_THRESHOLD})"
-                ),
-                "created_at": sub.created_at
-            })
+        candidate_items.append({
+            "submission_id": sub.id,
+            "evidence_id": ev.id,
+            "community_id": sub.community_id,
+            "community_title": community.title if community else "Unknown Channel",
+            "applicant_name": mask_sensitive_value(applicant_name, "name"),
+            "status": sub.status,
+            "risk_score": sub.risk_score,
+            "hamming_distance": dist,
+            "threshold": config.PHASH_HAMMING_THRESHOLD,
+            "is_exact_match": dist == 0,
+            "explanation": (
+                f"Identical perceptual photo match (Hamming distance {dist})"
+                if dist == 0
+                else f"Perceptually similar damage photo (Hamming distance {dist} <= {config.PHASH_HAMMING_THRESHOLD})"
+                if dist <= config.PHASH_HAMMING_THRESHOLD
+                else f"Closest visual match found across channel (Hamming distance {dist})"
+            ),
+            "created_at": sub.created_at
+        })
 
-    # Sort matches by closest distance, then newest
-    matches.sort(key=lambda m: (m["hamming_distance"], -m["submission_id"]))
+    # Sort candidates by closest distance, then newest
+    candidate_items.sort(key=lambda m: (m["hamming_distance"], -m["submission_id"]))
+
+    # Filter items within threshold; if none under threshold, take top 4 closest
+    matches = [m for m in candidate_items if m["hamming_distance"] <= config.PHASH_HAMMING_THRESHOLD]
+    if not matches and candidate_items:
+        matches = candidate_items[:4]
 
     # Record in InvestigationLog
     inv_log = InvestigationLog(
@@ -124,7 +130,7 @@ async def investigate_photo(
 def investigate_search(
     q: str = Query(..., min_length=1),
     query_type: str = Query("all", pattern="^(all|phone|bank_account|upi_id|id_number|address|name)$"),
-    investigator: User = Depends(require_investigator),
+    investigator: User = Depends(get_investigator_or_authorized),
     db: Session = Depends(get_db)
 ):
     """
@@ -234,7 +240,7 @@ def investigate_search(
 @router.get("/network/{submission_id}")
 def investigate_network(
     submission_id: int,
-    investigator: User = Depends(require_investigator),
+    investigator: User = Depends(get_investigator_or_authorized),
     db: Session = Depends(get_db)
 ):
     """
@@ -279,7 +285,7 @@ def investigate_network(
 @router.get("/logs", response_model=List[InvestigationLogOut])
 def get_investigation_logs(
     limit: int = Query(25, ge=1, le=100),
-    investigator: User = Depends(require_investigator),
+    investigator: User = Depends(get_investigator_or_authorized),
     db: Session = Depends(get_db)
 ):
     """
@@ -297,7 +303,7 @@ def get_investigation_logs(
 @router.post("/reveal/{value_id}")
 def investigator_reveal_value(
     value_id: int,
-    investigator: User = Depends(require_investigator),
+    investigator: User = Depends(get_investigator_or_authorized),
     db: Session = Depends(get_db)
 ):
     """

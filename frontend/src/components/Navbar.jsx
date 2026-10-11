@@ -452,24 +452,22 @@ export default function Navbar({ contactOpen, setContactOpen }) {
               </div>
             )}
 
-            {/* High Security (Shown only when isInvestigator) */}
-            {isInvestigator && (
-              <div className="flex flex-col gap-1 pt-2">
-                <span className="px-3 font-body text-[11px] text-[#554245]/70 uppercase tracking-wider font-semibold">
-                  High Security
-                </span>
-                <Link
-                  to="/investigate"
-                  onClick={() => setDrawerOpen(false)}
-                  className={`px-3.5 py-2 rounded-full transition-colors flex items-center gap-2 ${
-                    isActive('/investigate') ? 'bg-[#B02A52] text-white font-bold' : 'text-[#554245] hover:bg-[#dce9ff] hover:text-[#0b1c30]'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">manage_search</span>
-                  <span>Investigator Mode</span>
-                </Link>
-              </div>
-            )}
+            {/* High Security / Inspector Mode */}
+            <div className="flex flex-col gap-1 pt-2">
+              <span className="px-3 font-body text-[11px] text-[#554245]/70 uppercase tracking-wider font-semibold">
+                Cross-Scheme Discovery
+              </span>
+              <Link
+                to="/investigate"
+                onClick={() => setDrawerOpen(false)}
+                className={`px-3.5 py-2 rounded-full transition-colors flex items-center gap-2 ${
+                  isActive('/investigate') ? 'bg-[#B02A52] text-white font-bold' : 'text-[#554245] hover:bg-[#dce9ff] hover:text-[#0b1c30]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">manage_search</span>
+                <span>Inspector / Investigator Mode</span>
+              </Link>
+            </div>
 
             {/* System */}
             <div className="flex flex-col gap-1 pt-2">

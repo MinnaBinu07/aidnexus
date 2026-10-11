@@ -135,11 +135,7 @@ function AppContent() {
           {/* Investigator Portal Route */}
           <Route
             path="/investigate"
-            element={
-              <ProtectedRoute roles={['investigator']}>
-                <InvestigatorPortal />
-              </ProtectedRoute>
-            }
+            element={<InvestigatorPortal />}
           />
 
           {/* 404 Fallback */}

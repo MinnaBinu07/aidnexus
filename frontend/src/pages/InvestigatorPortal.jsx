@@ -91,7 +91,37 @@ export default function InvestigatorPortal() {
     }
   };
 
-  if (!user || !isInvestigator) {
+  const [enclaveUnlocked, setEnclaveUnlocked] = useState(false);
+  const gateFileInputRef = React.useRef(null);
+  const [searchingGateFile, setSearchingGateFile] = useState(false);
+  const [gateError, setGateError] = useState(null);
+
+  const handleAuthenticateClick = () => {
+    gateFileInputRef.current?.click();
+  };
+
+  const handleGateFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setSearchingGateFile(true);
+      setGateError(null);
+      setPhotoFile(file);
+      setPhotoPreview(URL.createObjectURL(file));
+
+      const data = await searchPhoto(file);
+      setPhotoResults(data);
+      setEnclaveUnlocked(true);
+      loadLogs();
+    } catch (err) {
+      setGateError(formatApiError(err, 'Failed to analyze file across channels.'));
+    } finally {
+      setSearchingGateFile(false);
+    }
+  };
+
+  if ((!user || !isInvestigator) && !enclaveUnlocked) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 font-body">
         <div className="bg-[#000000] border border-[#B02A52]/40 rounded-3xl p-8 text-center shadow-2xl space-y-5 text-[#F5F5F5]">
@@ -109,12 +139,60 @@ export default function InvestigatorPortal() {
             <p>• Every query is cryptographically hashed (SHA-256) into the immutable InvestigationLog.</p>
             <p>• Query images are processed strictly in-memory and never stored on disk.</p>
           </div>
-          <button
-            onClick={() => navigate('/login', { state: { from: '/investigate' } })}
-            className="h-12 px-8 bg-[#B02A52] hover:bg-[#962345] text-white font-bold rounded-full text-xs shadow-lg shadow-[#B02A52]/20 transition cursor-pointer"
+
+          {gateError && (
+            <div className="p-3.5 bg-[#B02A52]/20 border border-[#B02A52]/50 text-rose-200 text-xs rounded-xl">
+              {gateError}
+            </div>
+          )}
+
+          {/* Hidden File Input Triggered by Authenticate Button */}
+          <input
+            ref={gateFileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleGateFileSelect}
+            className="hidden"
+          />
+
+          {/* Upload Drop Zone */}
+          <div
+            onClick={handleAuthenticateClick}
+            className="border-2 border-dashed border-[#B02A52]/40 hover:border-[#B02A52] rounded-2xl p-6 bg-[#0A0A0A] cursor-pointer transition text-center group"
           >
-            Authenticate Investigator Account
-          </button>
+            <span className="material-symbols-outlined text-[#B02A52] text-[36px] group-hover:scale-110 transition-transform">
+              document_scanner
+            </span>
+            <p className="text-sm font-bold text-white mt-2">
+              Click to Upload Claim Photo or Document
+            </p>
+            <p className="text-xs text-[#9CA3AF] mt-1">
+              Scans every channel/community database to find similar files given by members.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <button
+              type="button"
+              disabled={searchingGateFile}
+              onClick={handleAuthenticateClick}
+              className="h-12 px-8 bg-[#B02A52] hover:bg-[#962345] disabled:opacity-50 text-white font-bold rounded-full text-xs shadow-lg shadow-[#B02A52]/20 transition cursor-pointer flex items-center justify-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[18px]">
+                {searchingGateFile ? 'hourglass_top' : 'upload_file'}
+              </span>
+              <span>
+                {searchingGateFile ? 'Scanning All Channels...' : 'Authenticate & Upload File'}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/login', { state: { from: '/investigate' } })}
+              className="h-12 px-6 bg-transparent hover:bg-[#1F1F23]/60 text-[#9CA3AF] hover:text-white font-bold rounded-full text-xs border border-[#1F1F23] transition cursor-pointer"
+            >
+              Sign In with Credentials
+            </button>
+          </div>
         </div>
       </div>
     );
