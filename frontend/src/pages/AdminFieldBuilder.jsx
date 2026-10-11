@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { 
-  Sliders, Plus, Trash2, ArrowUp, ArrowDown, Save, 
-  HelpCircle, CheckCircle2, Wand2, ArrowLeft
-} from 'lucide-react';
+import { Plus, Trash2, ArrowUp, ArrowDown, Save, ArrowLeft, CheckCircle2, Wand2 } from 'lucide-react';
 import { getMyCommunities, getRequiredFields, updateRequiredFields } from '../api/admin';
 import { LoadingSpinner, EmptyState, ErrorAlert } from '../components/FeedbackComponents';
+import { formatApiError } from '../utils/formatError';
 
 const FIELD_TYPES = [
   { value: 'text', label: 'Plain Text' },
@@ -30,7 +28,7 @@ const STANDARD_TEMPLATE = [
 ];
 
 export default function AdminFieldBuilder() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const commParam = searchParams.get('comm');
 
   const [communities, setCommunities] = useState([]);
@@ -42,17 +40,12 @@ export default function AdminFieldBuilder() {
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState('');
 
-  // 1. Load communities
-  useEffect(() => {
-    loadCommunities();
-  }, []);
-
-  const loadCommunities = async () => {
+  const loadCommunities = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const res = await getMyCommunities(1, 100);
-      const list = res.items || [];
+      const list = res?.items || [];
       setCommunities(list);
 
       if (list.length > 0) {
@@ -60,29 +53,34 @@ export default function AdminFieldBuilder() {
         setSelectedCommunityId(initialId);
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load communities.');
+      setError(formatApiError(err, 'Failed to load communities.'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [commParam]);
 
-  // 2. Load fields when community selected
+  // 1. Load communities
   useEffect(() => {
-    if (selectedCommunityId) {
-      loadFields(selectedCommunityId);
-    }
-  }, [selectedCommunityId]);
+    loadCommunities();
+  }, [loadCommunities]);
 
-  const loadFields = async (commId) => {
+  const loadFields = useCallback(async (commId) => {
     try {
       setError(null);
       setSuccessMsg('');
       const data = await getRequiredFields(commId);
       setFields(data || []);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load fields for this community.');
+      setError(formatApiError(err, 'Failed to load fields for this community.'));
     }
-  };
+  }, []);
+
+  // 2. Load fields when community selected
+  useEffect(() => {
+    if (selectedCommunityId) {
+      loadFields(selectedCommunityId);
+    }
+  }, [selectedCommunityId, loadFields]);
 
   const handleAddField = () => {
     setFields([
@@ -157,7 +155,7 @@ export default function AdminFieldBuilder() {
       setSuccessMsg('Field schema successfully saved and updated for this relief community.');
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to save required fields.');
+      setError(formatApiError(err, 'Failed to save required fields.'));
     } finally {
       setSaving(false);
     }

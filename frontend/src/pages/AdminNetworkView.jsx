@@ -1,14 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { 
-  Network, ArrowLeft, RefreshCw, Filter, Layers, 
-  Eye, AlertCircle, Info, ShieldAlert
-} from 'lucide-react';
+import { Network, ArrowLeft, RefreshCw, Eye, Info } from 'lucide-react';
 import { getMyCommunities, getCommunityNetwork, getFlaggedQueue } from '../api/admin';
 import NetworkGraph from '../components/NetworkGraph';
 import SubmissionDetailModal from '../components/SubmissionDetailModal';
 import { LoadingSpinner, EmptyState, ErrorAlert } from '../components/FeedbackComponents';
 import { RiskBadge, StatusBadge } from '../components/BadgesAndCards';
+import { formatApiError } from '../utils/formatError';
 
 export default function AdminNetworkView() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -30,16 +28,12 @@ export default function AdminNetworkView() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    loadCommunities();
-  }, []);
-
-  const loadCommunities = async () => {
+  const loadCommunities = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const res = await getMyCommunities(1, 100);
-      const list = res.items || [];
+      const list = res?.items || [];
       setCommunities(list);
 
       if (list.length > 0) {
@@ -47,19 +41,18 @@ export default function AdminNetworkView() {
         setSelectedCommunityId(initialId);
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load communities.');
+      setError(formatApiError(err, 'Failed to load communities.'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [commParam]);
 
   useEffect(() => {
-    if (selectedCommunityId) {
-      loadNetworkAndClusters();
-    }
-  }, [selectedCommunityId, selectedClusterId]);
+    loadCommunities();
+  }, [loadCommunities]);
 
-  const loadNetworkAndClusters = async () => {
+  const loadNetworkAndClusters = useCallback(async () => {
+    if (!selectedCommunityId) return;
     try {
       setRefreshing(true);
       setError(null);
@@ -69,18 +62,24 @@ export default function AdminNetworkView() {
         getCommunityNetwork(selectedCommunityId, selectedClusterId !== null ? selectedClusterId : undefined),
       ]);
 
-      setClusters(qData.flagged_networks || []);
+      setClusters(qData?.flagged_networks || []);
       setGraphData({
-        nodes: netData.nodes || [],
-        links: netData.links || [],
+        nodes: netData?.nodes || [],
+        links: netData?.links || [],
       });
       setSelectedNode(null);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load network graph data.');
+      setError(formatApiError(err, 'Failed to load network graph data.'));
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [selectedCommunityId, selectedClusterId]);
+
+  useEffect(() => {
+    if (selectedCommunityId) {
+      loadNetworkAndClusters();
+    }
+  }, [selectedCommunityId, loadNetworkAndClusters]);
 
   const handleNodeClick = (node) => {
     setSelectedNode(node);

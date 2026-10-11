@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  Plus, Upload, CheckCircle, QrCode, Sliders, Shield, KeyRound, 
-  Layers, ArrowUpRight, FileText, CheckCircle2, AlertCircle
-} from 'lucide-react';
+import { Plus, QrCode, Sliders, KeyRound, Layers, FileText, CheckCircle, CheckCircle2 } from 'lucide-react';
 import { getMyCommunities, createCommunity, updateCommunity, uploadCommunityQr } from '../api/admin';
 import { LoadingSpinner, EmptyState, ErrorAlert } from '../components/FeedbackComponents';
+import { formatApiError } from '../utils/formatError';
 
 export default function AdminCommunities() {
   const [communities, setCommunities] = useState([]);
@@ -23,22 +21,33 @@ export default function AdminCommunities() {
   const [qrFile, setQrFile] = useState(null);
   const [qrUploadSuccess, setQrUploadSuccess] = useState(null);
 
-  useEffect(() => {
-    loadCommunities();
-  }, []);
-
-  const loadCommunities = async () => {
+  const loadCommunities = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const res = await getMyCommunities(1, 100);
-      setCommunities(res.items || []);
+      setCommunities(res?.items || []);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load communities.');
+      setError(formatApiError(err, 'Failed to load communities.'));
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadCommunities();
+  }, [loadCommunities]);
+
+  // Escape key for modal
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && showCreateModal) {
+        setShowCreateModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showCreateModal]);
 
   const handleCreateCommunity = async (e) => {
     e.preventDefault();
@@ -47,7 +56,7 @@ export default function AdminCommunities() {
     try {
       setCreating(true);
       setError(null);
-      const created = await createCommunity({
+      await createCommunity({
         title: newTitle.trim(),
         description: newDescription.trim() || undefined,
       });
@@ -56,7 +65,7 @@ export default function AdminCommunities() {
       setNewDescription('');
       loadCommunities();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to create relief program.');
+      setError(formatApiError(err, 'Failed to create relief program.'));
     } finally {
       setCreating(false);
     }
@@ -68,7 +77,7 @@ export default function AdminCommunities() {
       await updateCommunity(comm.id, { status: nextStatus });
       loadCommunities();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to update program status.');
+      setError(formatApiError(err, 'Failed to update program status.'));
     }
   };
 
@@ -83,7 +92,7 @@ export default function AdminCommunities() {
       setTimeout(() => setQrUploadSuccess(null), 3000);
       loadCommunities();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to upload QR code.');
+      setError(formatApiError(err, 'Failed to upload QR code.'));
     } finally {
       setUploadingQrCommId(null);
     }
@@ -260,9 +269,18 @@ export default function AdminCommunities() {
 
       {/* Create Program Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5">
-            <h2 className="text-xl font-bold text-white">Create Relief Program</h2>
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowCreateModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-program-title"
+            className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="create-program-title" className="text-xl font-bold text-white">Create Relief Program</h2>
             <p className="text-xs text-slate-400">
               Set up a relief initiative (e.g. Floods Relief Camp, Drought Ration Distribution).
             </p>

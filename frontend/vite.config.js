@@ -2,6 +2,35 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+const apiProxy = {
+  target: 'http://127.0.0.1:8000',
+  changeOrigin: true,
+  bypass: (req) => {
+    // Browser page navigations (Accept: text/html) should serve index.html instead of hitting the backend proxy
+    if (req.headers.accept && req.headers.accept.includes('text/html')) {
+      return '/index.html';
+    }
+  },
+};
+
+const proxyEndpoints = [
+  '/auth',
+  '/communities',
+  '/codes',
+  '/join',
+  '/submissions',
+  '/evidence',
+  '/me',
+  '/investigate',
+  '/public',
+  '/public-qr',
+  '/notifications',
+];
+
+const proxy = Object.fromEntries(
+  proxyEndpoints.map((endpoint) => [endpoint, apiProxy])
+);
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -10,18 +39,6 @@ export default defineConfig({
   ],
   server: {
     port: 5173,
-    proxy: {
-      '/auth': 'http://127.0.0.1:8000',
-      '/communities': 'http://127.0.0.1:8000',
-      '/codes': 'http://127.0.0.1:8000',
-      '/join': 'http://127.0.0.1:8000',
-      '/submissions': 'http://127.0.0.1:8000',
-      '/evidence': 'http://127.0.0.1:8000',
-      '/me': 'http://127.0.0.1:8000',
-      '/investigate': 'http://127.0.0.1:8000',
-      '/public': 'http://127.0.0.1:8000',
-      '/public-qr': 'http://127.0.0.1:8000',
-      '/notifications': 'http://127.0.0.1:8000'
-    }
+    proxy
   }
 })

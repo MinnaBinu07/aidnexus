@@ -1,15 +1,126 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export default function Navbar() {
+export default function Navbar({ contactOpen, setContactOpen }) {
   const { user, logout, isAdmin, isMember, isInvestigator } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [contactOpen, setContactOpen] = useState(false);
-  const [lang, setLang] = useState('EN');
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+
+  const searchInputRef = useRef(null);
+  const mobileSearchInputRef = useRef(null);
+  const drawerRef = useRef(null);
+  const contactModalRef = useRef(null);
+  const lastActiveElementRef = useRef(null);
+
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.userAgent || '');
+  const shortcutLabel = isMac ? '⌘K' : 'Ctrl K';
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage('');
+    }, 2500);
+  };
+
+  const copyToClipboard = async (text, label) => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        showToast(`${label} copied to clipboard!`);
+      } else {
+        showToast(`${label}: ${text}`);
+      }
+    } catch {
+      showToast(`Unable to copy ${label}`);
+    }
+  };
+
+  // Keyboard shortcut for search (Ctrl/Cmd + K)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        if (window.innerWidth < 768) {
+          setShowMobileSearch(true);
+          setTimeout(() => mobileSearchInputRef.current?.focus(), 50);
+        } else {
+          searchInputRef.current?.focus();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Escape key and focus trap management
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (drawerOpen) {
+          setDrawerOpen(false);
+          lastActiveElementRef.current?.focus?.();
+        }
+        if (contactOpen) {
+          setContactOpen(false);
+          lastActiveElementRef.current?.focus?.();
+        }
+      }
+
+      // Focus trap for active dialog
+      const activeContainer = drawerOpen
+        ? drawerRef.current
+        : contactOpen
+        ? contactModalRef.current
+        : null;
+
+      if (activeContainer && e.key === 'Tab') {
+        const focusables = activeContainer.querySelectorAll(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+
+        const firstEl = focusables[0];
+        const lastEl = focusables[focusables.length - 1];
+
+        if (e.shiftKey && document.activeElement === firstEl) {
+          e.preventDefault();
+          lastEl.focus();
+        } else if (!e.shiftKey && document.activeElement === lastEl) {
+          e.preventDefault();
+          firstEl.focus();
+        }
+      }
+    };
+
+    if (drawerOpen || contactOpen) {
+      lastActiveElementRef.current = document.activeElement;
+      window.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [drawerOpen, contactOpen, setContactOpen]);
+
+  // Focus first element when drawer or contact opens
+  useEffect(() => {
+    if (drawerOpen && drawerRef.current) {
+      const closeBtn = drawerRef.current.querySelector('button');
+      closeBtn?.focus();
+    }
+  }, [drawerOpen]);
+
+  useEffect(() => {
+    if (contactOpen && contactModalRef.current) {
+      const closeBtn = contactModalRef.current.querySelector('button');
+      closeBtn?.focus();
+    }
+  }, [contactOpen]);
 
   const handleLogout = () => {
     logout();
@@ -17,7 +128,13 @@ export default function Navbar() {
     navigate('/login');
   };
 
-  const isActive = (path) => location.pathname === path;
+  // Prefix match for nested routes, exact match for root
+  const isActive = (path) => {
+    if (path === '/') {
+      return location.pathname === '/';
+    }
+    return location.pathname === path || location.pathname.startsWith(`${path}/`);
+  };
 
   return (
     <>
@@ -43,11 +160,13 @@ export default function Navbar() {
             </Link>
           </div>
 
-          {/* Middle: Search bar with shortcut pill */}
+          {/* Middle: Desktop Search bar */}
           <div className="flex-1 max-w-[480px] hidden md:flex items-center relative">
             <span className="material-symbols-outlined absolute left-3 text-[#554245] text-[18px]">search</span>
             <input
-              className="w-full h-11 pl-10 pr-14 bg-[#ffffff] rounded-full font-body text-sm text-[#0b1c30] placeholder:text-[#554245]/70 border border-[#dac0c4]/50 focus:outline-none focus:border-[#7a1f3d] focus:ring-2 focus:ring-[#7a1f3d]/20 transition-all"
+              ref={searchInputRef}
+              aria-label="Search relief schemes or records"
+              className="w-full h-11 pl-10 pr-16 bg-[#ffffff] rounded-full font-body text-sm text-[#0b1c30] placeholder:text-[#554245]/70 border border-[#dac0c4]/50 focus:outline-none focus:border-[#7a1f3d] focus:ring-2 focus:ring-[#7a1f3d]/20 transition-all"
               placeholder="Search relief schemes or records..."
               type="search"
               onKeyDown={(e) => {
@@ -56,26 +175,27 @@ export default function Navbar() {
                 }
               }}
             />
-            <kbd className="absolute right-3 px-2 py-0.5 rounded font-code text-xs text-[#554245] bg-[#dce9ff] select-none">
-              ⌘K
+            <kbd className="absolute right-3 px-2 py-0.5 rounded font-code text-xs text-[#554245] bg-[#dce9ff] select-none pointer-events-none">
+              {shortcutLabel}
             </kbd>
           </div>
 
-          {/* Right: Language, Notifications, User Profile */}
+          {/* Right: Mobile Search, Contact Desk, User Profile */}
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Mobile Search Toggle */}
             <button
-              onClick={() => setLang(lang === 'EN' ? 'ML' : 'EN')}
-              className="px-3.5 py-1.5 rounded-full font-body text-xs font-semibold bg-[#eff4ff] text-[#554245] hover:bg-[#dce9ff] hover:text-[#0b1c30] transition-colors flex items-center gap-1.5"
+              aria-label="Open search"
+              onClick={() => setShowMobileSearch((prev) => !prev)}
+              className="md:hidden p-2 rounded-full text-[#554245] hover:bg-[#dce9ff] hover:text-[#0b1c30] transition-colors flex items-center justify-center cursor-pointer"
               type="button"
             >
-              <span className="material-symbols-outlined text-[16px]">translate</span>
-              <span>{lang === 'EN' ? 'EN / മലയാളം' : 'മലയാളം / EN'}</span>
+              <span className="material-symbols-outlined text-[20px]">search</span>
             </button>
 
             <button
               aria-label="Contact Desk"
               onClick={() => setContactOpen(true)}
-              className="p-2 rounded-full text-[#554245] hover:bg-[#dce9ff] hover:text-[#0b1c30] transition-colors flex items-center justify-center"
+              className="p-2 rounded-full text-[#554245] hover:bg-[#dce9ff] hover:text-[#0b1c30] transition-colors flex items-center justify-center cursor-pointer"
               title="Help & Contact Desk"
               type="button"
             >
@@ -83,7 +203,9 @@ export default function Navbar() {
             </button>
 
             {user ? (
-              <div
+              <button
+                type="button"
+                aria-label="Open navigation menu"
                 onClick={() => setDrawerOpen(true)}
                 className="relative flex items-center gap-2 pl-1 py-1 pr-3 rounded-full bg-[#ffffff] hover:bg-[#dce9ff] transition-colors cursor-pointer border border-[#dac0c4]/40"
               >
@@ -94,7 +216,7 @@ export default function Navbar() {
                   {user.name}
                 </span>
                 <span className="material-symbols-outlined text-[#554245] text-[18px]">expand_more</span>
-              </div>
+              </button>
             ) : (
               <div className="flex items-center gap-2">
                 <Link
@@ -113,18 +235,56 @@ export default function Navbar() {
             )}
           </div>
         </div>
+
+        {/* Mobile Search Dropdown */}
+        {showMobileSearch && (
+          <div className="md:hidden px-4 py-2 bg-white border-b border-[#dac0c4]/40 flex items-center gap-2 shadow-md">
+            <div className="flex-1 relative flex items-center">
+              <span className="material-symbols-outlined absolute left-3 text-[#554245] text-[18px]">search</span>
+              <input
+                ref={mobileSearchInputRef}
+                aria-label="Search relief schemes or records (mobile)"
+                className="w-full h-10 pl-10 pr-4 bg-[#eff4ff] rounded-full font-body text-sm text-[#0b1c30] placeholder:text-[#554245]/70 border border-[#dac0c4]/50 focus:outline-none focus:border-[#7a1f3d]"
+                placeholder="Search schemes..."
+                type="search"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    navigate(`/public/communities?q=${encodeURIComponent(e.target.value)}`);
+                    setShowMobileSearch(false);
+                  }
+                }}
+              />
+            </div>
+            <button
+              type="button"
+              aria-label="Close search"
+              onClick={() => setShowMobileSearch(false)}
+              className="p-1 rounded-full text-[#554245] hover:bg-[#dce9ff]"
+            >
+              <span className="material-symbols-outlined text-[20px]">close</span>
+            </button>
+          </div>
+        )}
       </header>
 
       {/* Backdrop */}
       {drawerOpen && (
         <div
           className="fixed inset-0 bg-[#213145]/40 backdrop-blur-sm z-50 transition-opacity duration-300"
-          onClick={() => setDrawerOpen(false)}
+          onClick={() => {
+            setDrawerOpen(false);
+            lastActiveElementRef.current?.focus?.();
+          }}
         />
       )}
 
       {/* Slide-out Navigation Drawer */}
       <aside
+        ref={drawerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation Drawer"
+        inert={!drawerOpen ? '' : undefined}
         className={`fixed left-0 top-0 bottom-0 w-80 bg-[#ffffff] z-50 shadow-2xl p-6 flex flex-col justify-between transition-transform duration-300 ease-in-out border-r border-[#dac0c4]/40 ${
           drawerOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
@@ -139,9 +299,12 @@ export default function Navbar() {
               <span className="font-headline text-xl text-[#5c0427]">AidNexus</span>
             </div>
             <button
-              aria-label="Close drawer"
-              className="p-1 rounded-full text-[#554245] hover:bg-[#dce9ff] hover:text-[#0b1c30] transition-colors"
-              onClick={() => setDrawerOpen(false)}
+              aria-label="Close navigation drawer"
+              className="p-1 rounded-full text-[#554245] hover:bg-[#dce9ff] hover:text-[#0b1c30] transition-colors cursor-pointer"
+              onClick={() => {
+                setDrawerOpen(false);
+                lastActiveElementRef.current?.focus?.();
+              }}
               type="button"
             >
               <span className="material-symbols-outlined text-[20px]">close</span>
@@ -186,6 +349,7 @@ export default function Navbar() {
                 <span className="material-symbols-outlined text-[18px]">group_add</span>
                 <span>Join Us (Household)</span>
               </Link>
+              {/* Single Relief Schemes & Communities Link (removed duplicate) */}
               <Link
                 to="/public/communities"
                 onClick={() => setDrawerOpen(false)}
@@ -194,38 +358,16 @@ export default function Navbar() {
                 }`}
               >
                 <span className="material-symbols-outlined text-[18px]">public</span>
-                <span>Donor Portal & Schemes</span>
+                <span>Relief Schemes & Communities</span>
               </Link>
             </div>
 
-            {/* Core Relief */}
-            <div className="flex flex-col gap-1 pt-2">
-              <span className="px-3 font-body text-[11px] text-[#554245]/70 uppercase tracking-wider font-semibold">
-                Core Relief
-              </span>
-              <Link
-                to="/public/communities"
-                onClick={() => setDrawerOpen(false)}
-                className={`px-3.5 py-2 rounded-full transition-colors flex items-center gap-2 ${
-                  isActive('/public/communities') ? 'bg-[#7a1f3d] text-white font-bold' : 'text-[#554245] hover:bg-[#dce9ff] hover:text-[#0b1c30]'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[18px]">location_city</span>
-                <span>Communities Home</span>
-              </Link>
-              {user && (
-                <Link
-                  to="/admin/communities"
-                  onClick={() => setDrawerOpen(false)}
-                  className={`px-3.5 py-2 rounded-full transition-colors flex items-center gap-2 ${
-                    isActive('/admin/communities') ? 'bg-[#7a1f3d] text-white font-bold' : 'text-[#554245] hover:bg-[#dce9ff] hover:text-[#0b1c30]'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">folder_managed</span>
-                  <span>My Communities</span>
-                </Link>
-              )}
-              {isMember && (
+            {/* Core Member Area */}
+            {isMember && (
+              <div className="flex flex-col gap-1 pt-2">
+                <span className="px-3 font-body text-[11px] text-[#554245]/70 uppercase tracking-wider font-semibold">
+                  Member Portal
+                </span>
                 <Link
                   to="/status"
                   onClick={() => setDrawerOpen(false)}
@@ -236,10 +378,10 @@ export default function Navbar() {
                   <span className="material-symbols-outlined text-[18px]">how_to_reg</span>
                   <span>My Claim Status</span>
                 </Link>
-              )}
-            </div>
+              </div>
+            )}
 
-            {/* Administrative */}
+            {/* Administrative (Only for isAdmin) */}
             {isAdmin && (
               <div className="flex flex-col gap-1 pt-2">
                 <span className="px-3 font-body text-[11px] text-[#554245]/70 uppercase tracking-wider font-semibold">
@@ -254,6 +396,28 @@ export default function Navbar() {
                 >
                   <span className="material-symbols-outlined text-[18px]">dashboard</span>
                   <span>Admin Dashboard</span>
+                </Link>
+                {/* My Communities - shown only for isAdmin */}
+                <Link
+                  to="/admin/communities"
+                  onClick={() => setDrawerOpen(false)}
+                  className={`px-3.5 py-2 rounded-full transition-colors flex items-center gap-2 ${
+                    isActive('/admin/communities') ? 'bg-[#7a1f3d] text-white font-bold' : 'text-[#554245] hover:bg-[#dce9ff] hover:text-[#0b1c30]'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">folder_managed</span>
+                  <span>My Communities</span>
+                </Link>
+                {/* Added missing Field Builder link */}
+                <Link
+                  to="/admin/fields"
+                  onClick={() => setDrawerOpen(false)}
+                  className={`px-3.5 py-2 rounded-full transition-colors flex items-center gap-2 ${
+                    isActive('/admin/fields') ? 'bg-[#7a1f3d] text-white font-bold' : 'text-[#554245] hover:bg-[#dce9ff] hover:text-[#0b1c30]'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">tune</span>
+                  <span>Field Builder</span>
                 </Link>
                 <Link
                   to="/admin/codes"
@@ -288,22 +452,24 @@ export default function Navbar() {
               </div>
             )}
 
-            {/* High Security */}
-            <div className="flex flex-col gap-1 pt-2">
-              <span className="px-3 font-body text-[11px] text-[#554245]/70 uppercase tracking-wider font-semibold">
-                High Security
-              </span>
-              <Link
-                to="/investigate"
-                onClick={() => setDrawerOpen(false)}
-                className={`px-3.5 py-2 rounded-full transition-colors flex items-center gap-2 ${
-                  isActive('/investigate') ? 'bg-[#B02A52] text-white font-bold' : 'text-[#554245] hover:bg-[#dce9ff] hover:text-[#0b1c30]'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[18px]">manage_search</span>
-                <span>Investigator Mode</span>
-              </Link>
-            </div>
+            {/* High Security (Shown only when isInvestigator) */}
+            {isInvestigator && (
+              <div className="flex flex-col gap-1 pt-2">
+                <span className="px-3 font-body text-[11px] text-[#554245]/70 uppercase tracking-wider font-semibold">
+                  High Security
+                </span>
+                <Link
+                  to="/investigate"
+                  onClick={() => setDrawerOpen(false)}
+                  className={`px-3.5 py-2 rounded-full transition-colors flex items-center gap-2 ${
+                    isActive('/investigate') ? 'bg-[#B02A52] text-white font-bold' : 'text-[#554245] hover:bg-[#dce9ff] hover:text-[#0b1c30]'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">manage_search</span>
+                  <span>Investigator Mode</span>
+                </Link>
+              </div>
+            )}
 
             {/* System */}
             <div className="flex flex-col gap-1 pt-2">
@@ -315,7 +481,7 @@ export default function Navbar() {
                   setDrawerOpen(false);
                   setContactOpen(true);
                 }}
-                className="px-3.5 py-2 rounded-full text-[#554245] hover:bg-[#dce9ff] hover:text-[#0b1c30] transition-colors flex items-center gap-2 text-left"
+                className="px-3.5 py-2 rounded-full text-[#554245] hover:bg-[#dce9ff] hover:text-[#0b1c30] transition-colors flex items-center gap-2 text-left cursor-pointer"
                 type="button"
               >
                 <span className="material-symbols-outlined text-[18px]">contact_support</span>
@@ -330,7 +496,7 @@ export default function Navbar() {
           {user ? (
             <button
               onClick={handleLogout}
-              className="w-full h-11 px-4 rounded-full bg-[#dce9ff] text-[#0b1c30] hover:bg-[#d3e4fe] transition-colors font-body text-xs font-semibold flex items-center justify-center gap-2"
+              className="w-full h-11 px-4 rounded-full bg-[#dce9ff] text-[#0b1c30] hover:bg-[#d3e4fe] transition-colors font-body text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer"
               type="button"
             >
               <span className="material-symbols-outlined text-[18px]">logout</span>
@@ -349,13 +515,20 @@ export default function Navbar() {
         </div>
       </aside>
 
-      {/* Contact Popup Modal (Exact from Provided Spec) */}
+      {/* Contact Popup Modal */}
       {contactOpen && (
         <div
           className="fixed inset-0 bg-[#213145]/50 backdrop-blur-md z-50 flex items-center justify-center p-4 transition-opacity duration-300"
-          onClick={() => setContactOpen(false)}
+          onClick={() => {
+            setContactOpen(false);
+            lastActiveElementRef.current?.focus?.();
+          }}
         >
           <div
+            ref={contactModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="contact-modal-title"
             className="bg-[#ffffff] rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative border border-[#dac0c4]/30"
             onClick={(e) => e.stopPropagation()}
           >
@@ -368,13 +541,16 @@ export default function Navbar() {
                   <span className="font-code text-xs text-[#7a1f3d] uppercase tracking-wider font-semibold block">
                     CIVIL SUPPORT DESK
                   </span>
-                  <h3 className="font-headline text-lg text-[#5c0427]">Contact AidNexus Support</h3>
+                  <h3 id="contact-modal-title" className="font-headline text-lg text-[#5c0427]">Contact AidNexus Support</h3>
                 </div>
               </div>
               <button
                 aria-label="Close Contact Modal"
-                className="p-1 rounded-full text-[#554245] hover:bg-[#dce9ff] transition-colors flex items-center justify-center"
-                onClick={() => setContactOpen(false)}
+                className="p-1 rounded-full text-[#554245] hover:bg-[#dce9ff] transition-colors flex items-center justify-center cursor-pointer"
+                onClick={() => {
+                  setContactOpen(false);
+                  lastActiveElementRef.current?.focus?.();
+                }}
                 type="button"
               >
                 <span className="material-symbols-outlined text-[20px]">close</span>
@@ -383,6 +559,7 @@ export default function Navbar() {
 
             <div className="my-5 space-y-4">
               {/* Phone Hotline */}
+              {/* TODO(verify): Confirm fallback values (support@aidnexus.org and 1070 hotline) with relief operations administrators */}
               <div className="bg-[#eff4ff] rounded-2xl p-4 border border-[#dac0c4]/30 flex flex-col gap-1">
                 <div className="flex items-center justify-between">
                   <span className="font-body text-xs uppercase tracking-wider text-[#554245] font-semibold flex items-center gap-1">
@@ -393,7 +570,10 @@ export default function Navbar() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between pt-1">
-                  <a className="font-headline text-2xl text-[#5c0427] tracking-tight font-bold hover:underline" href={`tel:${import.meta.env.VITE_HOTLINE_PHONE || '1070'}`}>
+                  <a
+                    className="font-headline text-2xl text-[#5c0427] tracking-tight font-bold hover:underline"
+                    href={`tel:${import.meta.env.VITE_HOTLINE_PHONE || '1070'}`}
+                  >
                     {import.meta.env.VITE_HOTLINE_PHONE || '1070 (Toll-Free)'}
                   </a>
                   <div className="flex items-center gap-2">
@@ -405,10 +585,10 @@ export default function Navbar() {
                       <span>Call</span>
                     </a>
                     <button
+                      aria-label="Copy hotline number"
                       className="h-8 px-2.5 rounded-full bg-[#dce9ff] hover:bg-[#d3e4fe] text-[#0b1c30] font-body text-xs transition-colors flex items-center gap-1 cursor-pointer"
                       onClick={() => {
-                        navigator.clipboard.writeText(import.meta.env.VITE_HOTLINE_PHONE || '1070');
-                        alert('Hotline copied to clipboard!');
+                        copyToClipboard(import.meta.env.VITE_HOTLINE_PHONE || '1070', 'Hotline');
                       }}
                       type="button"
                     >
@@ -425,11 +605,14 @@ export default function Navbar() {
                     <span className="material-symbols-outlined text-[16px] text-[#5c0427]">mail</span> Direct Email Inquiries
                   </span>
                   <span className="font-code text-[11px] px-2 py-0.5 rounded-full bg-[#dce9ff] text-[#554245] font-medium">
-                    Encrypted
+                    Direct Contact
                   </span>
                 </div>
                 <div className="flex items-center justify-between pt-1">
-                  <a className="font-body text-sm text-[#5c0427] font-bold hover:underline break-all" href={`mailto:${import.meta.env.VITE_CONTACT_EMAIL || 'support@aidnexus.org'}`}>
+                  <a
+                    className="font-body text-sm text-[#5c0427] font-bold hover:underline break-all"
+                    href={`mailto:${import.meta.env.VITE_CONTACT_EMAIL || 'support@aidnexus.org'}`}
+                  >
                     {import.meta.env.VITE_CONTACT_EMAIL || 'support@aidnexus.org'}
                   </a>
                   <div className="flex items-center gap-2">
@@ -441,10 +624,10 @@ export default function Navbar() {
                       <span>Email</span>
                     </a>
                     <button
+                      aria-label="Copy support email"
                       className="h-8 px-2.5 rounded-full bg-[#dce9ff] hover:bg-[#d3e4fe] text-[#0b1c30] font-body text-xs transition-colors flex items-center gap-1 cursor-pointer"
                       onClick={() => {
-                        navigator.clipboard.writeText(import.meta.env.VITE_CONTACT_EMAIL || 'support@aidnexus.org');
-                        alert('Email copied to clipboard!');
+                        copyToClipboard(import.meta.env.VITE_CONTACT_EMAIL || 'support@aidnexus.org', 'Support email');
                       }}
                       type="button"
                     >
@@ -454,23 +637,38 @@ export default function Navbar() {
                 </div>
               </div>
 
-              {/* Privacy Shield note */}
+              {/* Privacy and handling note - honest wording */}
               <div className="p-3 bg-[#f1dee3]/60 rounded-xl flex items-start gap-2 text-xs text-[#554245]">
                 <span className="material-symbols-outlined text-[18px] text-[#5c0427] shrink-0 mt-0.5">verified_user</span>
                 <p>
-                  Direct inquiries are encrypted and handled confidentially in accordance with the AidNexus Privacy Shield protocol.
+                  Direct inquiries are handled confidentially by verified relief coordination personnel for humanitarian disaster relief inquiries.
                 </p>
               </div>
             </div>
 
             <button
-              className="w-full h-11 rounded-full bg-[#dce9ff] hover:bg-[#d3e4fe] text-[#0b1c30] font-body text-xs font-bold transition-colors"
-              onClick={() => setContactOpen(false)}
+              className="w-full h-11 rounded-full bg-[#dce9ff] hover:bg-[#d3e4fe] text-[#0b1c30] font-body text-xs font-bold transition-colors cursor-pointer"
+              onClick={() => {
+                setContactOpen(false);
+                lastActiveElementRef.current?.focus?.();
+              }}
               type="button"
             >
               Dismiss
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Small Toast Notification */}
+      {toastMessage && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-16 right-4 z-50 bg-[#0b1c30] text-white px-4 py-2.5 rounded-2xl shadow-xl text-xs font-semibold flex items-center gap-2 border border-[#dac0c4]/40 animate-fade-in"
+        >
+          <span className="material-symbols-outlined text-[18px] text-[#7a1f3d]">check_circle</span>
+          <span>{toastMessage}</span>
         </div>
       )}
     </>

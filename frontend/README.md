@@ -1,16 +1,19 @@
-# React + Vite
+# AidNexus Frontend (React 19 + Vite + Tailwind CSS v4)
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Civil disaster verification and autonomous relief protocol frontend.
 
-Currently, two official plugins are available:
+## Environment Variables Note
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+> **Important**: Vite bakes all variables prefixed with `VITE_` (such as `VITE_API_BASE_URL`, `VITE_CONTACT_EMAIL`, and `VITE_HOTLINE_PHONE`) into the client JavaScript bundle **at build time**. If you update these environment variables in your deployment environment (e.g. Vercel, Netlify, Docker), a **full rebuild and redeploy** is required for the changes to take effect.
 
-## React Compiler
+Refer to `.env.example` for variable definitions:
+- `VITE_API_BASE_URL`: Base URL for the FastAPI backend (e.g. `http://127.0.0.1:8000` or production backend domain). When deploying on Vercel where the backend is hosted elsewhere, this MUST be set to prevent requests hitting the static host and returning HTML.
+- `VITE_CONTACT_EMAIL`: Institutional support email displayed in contact modals and mailto links.
+- `VITE_HOTLINE_PHONE`: Priority disaster relief phone number displayed in contact modals and tel links.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Scripts
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+- `npm run dev`: Start Vite development server with proxying
+- `npm run build`: Production build with Vite
+- `npm run lint`: Fast code linting with Oxlint
+- `npm run preview`: Preview production build

@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { 
-  KeyRound, Plus, Copy, Check, Ban, Filter, 
-  ArrowLeft, RefreshCw, Users, ShieldCheck, Share2
+  Plus, Copy, Check, Ban, Filter, 
+  ArrowLeft, RefreshCw
 } from 'lucide-react';
 import { getMyCommunities, generateCodes, getCommunityCodes, revokeCode } from '../api/admin';
 import { LoadingSpinner, EmptyState, ErrorAlert } from '../components/FeedbackComponents';
+import { formatApiError } from '../utils/formatError';
 
 export default function AdminCodeGenerator() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const commParam = searchParams.get('comm');
 
   const [communities, setCommunities] = useState([]);
@@ -31,16 +32,12 @@ export default function AdminCodeGenerator() {
   const [error, setError] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
 
-  useEffect(() => {
-    loadCommunities();
-  }, []);
-
-  const loadCommunities = async () => {
+  const loadCommunities = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const res = await getMyCommunities(1, 100);
-      const list = res.items || [];
+      const list = res?.items || [];
       setCommunities(list);
 
       if (list.length > 0) {
@@ -48,19 +45,18 @@ export default function AdminCodeGenerator() {
         setSelectedCommunityId(initialId);
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load communities.');
+      setError(formatApiError(err, 'Failed to load communities.'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [commParam]);
 
   useEffect(() => {
-    if (selectedCommunityId) {
-      loadCodes();
-    }
-  }, [selectedCommunityId, statusFilter, currentPage]);
+    loadCommunities();
+  }, [loadCommunities]);
 
-  const loadCodes = async () => {
+  const loadCodes = useCallback(async () => {
+    if (!selectedCommunityId) return;
     try {
       setRefreshing(true);
       setError(null);
@@ -70,15 +66,32 @@ export default function AdminCodeGenerator() {
         currentPage,
         25
       );
-      setCodes(data.items || []);
-      setTotalCodes(data.total || 0);
-      setTotalPages(data.total_pages || 1);
+      setCodes(data?.items || []);
+      setTotalCodes(data?.total || 0);
+      setTotalPages(data?.total_pages || 1);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load access codes.');
+      setError(formatApiError(err, 'Failed to load access codes.'));
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [selectedCommunityId, statusFilter, currentPage]);
+
+  useEffect(() => {
+    if (selectedCommunityId) {
+      loadCodes();
+    }
+  }, [selectedCommunityId, loadCodes]);
+
+  // Escape key for modal
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && showGenModal) {
+        setShowGenModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showGenModal]);
 
   const handleBulkGenerate = async (e) => {
     e.preventDefault();
@@ -97,7 +110,7 @@ export default function AdminCodeGenerator() {
       setCurrentPage(1);
       loadCodes();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to generate codes.');
+      setError(formatApiError(err, 'Failed to generate codes.'));
     } finally {
       setGenerating(false);
     }
@@ -111,13 +124,19 @@ export default function AdminCodeGenerator() {
       await revokeCode(codeId);
       loadCodes();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to revoke code.');
+      setError(formatApiError(err, 'Failed to revoke code.'));
     }
   };
 
-  const handleCopyLink = (codeStr, id) => {
+  const handleCopyLink = async (codeStr, id) => {
     const url = `${window.location.origin}/join?code=${codeStr}`;
-    navigator.clipboard.writeText(url);
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      }
+    } catch {
+      // fallback
+    }
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2500);
   };
@@ -347,9 +366,18 @@ export default function AdminCodeGenerator() {
 
       {/* Bulk Generate Modal */}
       {showGenModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5">
-            <h2 className="text-xl font-bold text-white">Generate Single-Use Codes</h2>
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowGenModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bulk-generate-title"
+            className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="bulk-generate-title" className="text-xl font-bold text-white">Generate Single-Use Codes</h2>
             <p className="text-xs text-slate-400">
               Each generated token can only be redeemed once during claim submission and binds the applicant to this relief program.
             </p>

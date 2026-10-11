@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { searchPhoto, searchQuery, getInvestigationLogs } from '../api/investigator';
-import { LoadingSpinner, ErrorAlert } from '../components/FeedbackComponents';
 import SubmissionDetailModal from '../components/SubmissionDetailModal';
+import { formatApiError } from '../utils/formatError';
 
 export default function InvestigatorPortal() {
   const { user, isInvestigator } = useAuth();
+  const navigate = useNavigate();
 
   // Search Mode: 'photo' | 'name' | 'phone' | 'bank_account' | 'address' | 'logs'
   const [searchMode, setSearchMode] = useState('photo');
@@ -29,22 +31,22 @@ export default function InvestigatorPortal() {
   const [error, setError] = useState(null);
   const [activeSubmissionId, setActiveSubmissionId] = useState(null);
 
-  useEffect(() => {
-    loadLogs();
-  }, [isInvestigator]);
-
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async () => {
     if (!isInvestigator) return;
     try {
       setLoadingLogs(true);
       const data = await getInvestigationLogs(50);
       setLogs(data || []);
-    } catch (err) {
+    } catch {
       // Non-blocking log load
     } finally {
       setLoadingLogs(false);
     }
-  };
+  }, [isInvestigator]);
+
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
 
   const handlePhotoSelect = (e) => {
     const file = e.target.files[0];
@@ -65,7 +67,7 @@ export default function InvestigatorPortal() {
       setPhotoResults(data);
       loadLogs();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to execute cross-community photo analysis.');
+      setError(formatApiError(err, 'Failed to execute cross-community photo analysis.'));
     } finally {
       setSearchingPhoto(false);
     }
@@ -83,7 +85,7 @@ export default function InvestigatorPortal() {
       setTextResults(data);
       loadLogs();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to execute cross-community analysis.');
+      setError(formatApiError(err, 'Failed to execute cross-community analysis.'));
     } finally {
       setSearchingText(false);
     }
@@ -108,7 +110,7 @@ export default function InvestigatorPortal() {
             <p>• Query images are processed strictly in-memory and never stored on disk.</p>
           </div>
           <button
-            onClick={() => window.location.href = '/login'}
+            onClick={() => navigate('/login', { state: { from: '/investigate' } })}
             className="h-12 px-8 bg-[#B02A52] hover:bg-[#962345] text-white font-bold rounded-full text-xs shadow-lg shadow-[#B02A52]/20 transition cursor-pointer"
           >
             Authenticate Investigator Account
@@ -531,7 +533,7 @@ export default function InvestigatorPortal() {
                     ) : (
                       <tr>
                         <td colSpan={5} className="py-6 text-center text-[#9CA3AF]">
-                          No query sessions logged in this enclave instance yet.
+                          {loadingLogs ? 'Loading query sessions...' : 'No query sessions logged in this enclave instance yet.'}
                         </td>
                       </tr>
                     )}

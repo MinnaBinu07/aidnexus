@@ -1,3 +1,4 @@
+import os
 from math import ceil
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -13,6 +14,7 @@ router = APIRouter(prefix="/public", tags=["Public"])
 def list_public_communities(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    q: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -22,8 +24,15 @@ def list_public_communities(
     query = (
         db.query(Community)
         .filter(Community.status == "open")
-        .order_by(Community.created_at.desc())
     )
+
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        query = query.filter(
+            (Community.title.ilike(term)) | (Community.description.ilike(term))
+        )
+
+    query = query.order_by(Community.created_at.desc())
 
     total = query.count()
     items = query.offset((page - 1) * page_size).limit(page_size).all()
@@ -104,8 +113,15 @@ def get_public_community(
 @router.get("/demo-code")
 def get_demo_access_code(db: Session = Depends(get_db)):
     """
-    Returns an active, unredeemed access code directly from the database for joining/testing.
+    Dev-gated endpoint. In production, this endpoint is strictly disabled.
     """
+    is_dev = os.getenv("ENVIRONMENT", "development").lower() in ("development", "dev", "test")
+    if not is_dev:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Demo code endpoint is disabled in production."
+        )
+
     from backend.app.models.models import AccessCode
     code_obj = (
         db.query(AccessCode)

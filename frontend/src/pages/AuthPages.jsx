@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { registerUser } from '../api/auth';
+import { formatApiError } from '../utils/formatError';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
@@ -10,6 +11,7 @@ export const Login = () => {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -17,11 +19,20 @@ export const Login = () => {
       setLoading(true);
       setError('');
       const user = await login(email, password);
-      if (user.role === 'admin') navigate('/admin');
-      else if (user.role === 'member') navigate('/member/status');
-      else navigate('/');
+      const from = location.state?.from?.pathname || location.state?.from || null;
+      if (from) {
+        navigate(from, { replace: true });
+      } else if (user.role === 'admin') {
+        navigate('/admin', { replace: true });
+      } else if (user.role === 'investigator') {
+        navigate('/investigate', { replace: true });
+      } else if (user.role === 'member') {
+        navigate('/status', { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Incorrect email or password.');
+      setError(formatApiError(err, 'Incorrect email or password.'));
     } finally {
       setLoading(false);
     }
@@ -105,6 +116,7 @@ export const Register = () => {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -113,11 +125,20 @@ export const Register = () => {
       setError('');
       await registerUser({ name, email, password, role, phone: phone || null });
       const user = await login(email, password);
-      if (user.role === 'admin') navigate('/admin');
-      else if (user.role === 'member') navigate('/member/status');
-      else navigate('/');
+      const from = location.state?.from?.pathname || location.state?.from || null;
+      if (from) {
+        navigate(from, { replace: true });
+      } else if (user.role === 'admin') {
+        navigate('/admin', { replace: true });
+      } else if (user.role === 'investigator') {
+        navigate('/investigate', { replace: true });
+      } else if (user.role === 'member') {
+        navigate('/status', { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to register account.');
+      setError(formatApiError(err, 'Failed to register account.'));
     } finally {
       setLoading(false);
     }
@@ -146,7 +167,7 @@ export const Register = () => {
               <button
                 type="button"
                 onClick={() => setRole('admin')}
-                className={`py-2.5 text-xs font-bold rounded-full border text-center transition ${
+                className={`py-2.5 text-xs font-bold rounded-full border text-center transition cursor-pointer ${
                   role === 'admin'
                     ? 'bg-[#7a1f3d] border-[#7a1f3d] text-white'
                     : 'border-[#dac0c4]/60 text-[#554245] hover:bg-[#eff4ff]'
@@ -157,7 +178,7 @@ export const Register = () => {
               <button
                 type="button"
                 onClick={() => setRole('member')}
-                className={`py-2.5 text-xs font-bold rounded-full border text-center transition ${
+                className={`py-2.5 text-xs font-bold rounded-full border text-center transition cursor-pointer ${
                   role === 'member'
                     ? 'bg-[#7a1f3d] border-[#7a1f3d] text-white'
                     : 'border-[#dac0c4]/60 text-[#554245] hover:bg-[#eff4ff]'

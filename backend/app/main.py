@@ -27,13 +27,25 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS configuration
+# CORS configuration: explicit origins required when allow_credentials=True
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://aidnexus-nu.vercel.app",
+]
+frontend_env = os.getenv("FRONTEND_URL")
+if frontend_env and frontend_env not in origins:
+    origins.append(frontend_env)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Exception: Public QR images only

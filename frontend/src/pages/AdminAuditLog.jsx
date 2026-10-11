@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { 
-  FileText, ArrowLeft, RefreshCw, Filter, Search, 
-  ShieldCheck, Eye, KeyRound, AlertTriangle
-} from 'lucide-react';
+import { ArrowLeft, RefreshCw, Search, Eye, KeyRound } from 'lucide-react';
 import { getMyCommunities, getCommunityAuditLogs } from '../api/admin';
 import { LoadingSpinner, EmptyState, ErrorAlert } from '../components/FeedbackComponents';
+import { formatApiError } from '../utils/formatError';
 
 export default function AdminAuditLog() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -23,16 +21,12 @@ export default function AdminAuditLog() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    loadCommunities();
-  }, []);
-
-  const loadCommunities = async () => {
+  const loadCommunities = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const res = await getMyCommunities(1, 100);
-      const list = res.items || [];
+      const list = res?.items || [];
       setCommunities(list);
 
       if (list.length > 0) {
@@ -40,32 +34,37 @@ export default function AdminAuditLog() {
         setSelectedCommunityId(initialId);
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load communities.');
+      setError(formatApiError(err, 'Failed to load communities.'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [commParam]);
+
+  useEffect(() => {
+    loadCommunities();
+  }, [loadCommunities]);
+
+  const loadLogs = useCallback(async () => {
+    if (!selectedCommunityId) return;
+    try {
+      setRefreshing(true);
+      setError(null);
+      const data = await getCommunityAuditLogs(selectedCommunityId, currentPage, 30);
+      setLogs(data?.items || []);
+      setTotalLogs(data?.total || 0);
+      setTotalPages(data?.total_pages || 1);
+    } catch (err) {
+      setError(formatApiError(err, 'Failed to load audit trail logs.'));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [selectedCommunityId, currentPage]);
 
   useEffect(() => {
     if (selectedCommunityId) {
       loadLogs();
     }
-  }, [selectedCommunityId, currentPage]);
-
-  const loadLogs = async () => {
-    try {
-      setRefreshing(true);
-      setError(null);
-      const data = await getCommunityAuditLogs(selectedCommunityId, currentPage, 30);
-      setLogs(data.items || []);
-      setTotalLogs(data.total || 0);
-      setTotalPages(data.total_pages || 1);
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load audit trail logs.');
-    } finally {
-      setRefreshing(false);
-    }
-  };
+  }, [selectedCommunityId, loadLogs]);
 
   const filteredLogs = logs.filter((log) => {
     if (!searchTerm.trim()) return true;
@@ -173,7 +172,7 @@ export default function AdminAuditLog() {
           <div>
             <h2 className="text-xl font-bold text-white">System Events Registry</h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Showing {filteredLogs.length} events (Page {currentPage} of {totalPages})
+              Showing {filteredLogs.length} of {totalLogs} events (Page {currentPage} of {totalPages})
             </p>
           </div>
 

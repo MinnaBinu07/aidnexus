@@ -1,45 +1,62 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { getSubmissionDetail, revealValue, reviewSubmission, createDocumentRequest } from '../api/admin';
 import { LoadingSpinner, ErrorAlert } from './FeedbackComponents';
 import { RiskBadge, StatusBadge } from './BadgesAndCards';
 import { Eye, ShieldAlert, FileText, CheckCircle, AlertTriangle, Send, X } from 'lucide-react';
+import { formatApiError } from '../utils/formatError';
 
 export const SubmissionDetailModal = ({ submissionId, onClose, onRefresh, onReviewSubmitted }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
   const [revealedMap, setRevealedMap] = useState({});
   const [revealingId, setRevealingId] = useState(null);
   const [reviewing, setReviewing] = useState(false);
   const [docMsg, setDocMsg] = useState('');
   const [sendingDocReq, setSendingDocReq] = useState(false);
 
-  const fetchDetail = async () => {
+  const modalRef = useRef(null);
+
+  const fetchDetail = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
       const res = await getSubmissionDetail(submissionId);
       setData(res);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load submission details.');
+      setError(formatApiError(err, 'Failed to load submission details.'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [submissionId]);
 
   useEffect(() => {
     if (submissionId) {
       fetchDetail();
     }
-  }, [submissionId]);
+  }, [submissionId, fetchDetail]);
+
+  // Escape key listener for dialog
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const handleReveal = async (valId) => {
     try {
       setRevealingId(valId);
+      setActionError('');
       const res = await revealValue(submissionId, valId);
       setRevealedMap((prev) => ({ ...prev, [valId]: res.raw_value }));
     } catch (err) {
-      alert(err.response?.data?.detail || 'Could not reveal value.');
+      setActionError(formatApiError(err, 'Could not reveal value.'));
     } finally {
       setRevealingId(null);
     }
@@ -48,12 +65,15 @@ export const SubmissionDetailModal = ({ submissionId, onClose, onRefresh, onRevi
   const handleReviewAction = async (action, statusChange = null) => {
     try {
       setReviewing(true);
+      setActionError('');
+      setActionSuccess('');
       await reviewSubmission(submissionId, { action, status_change: statusChange });
+      setActionSuccess(`Review action "${action}" recorded successfully.`);
       await fetchDetail();
       if (onRefresh) onRefresh();
       if (onReviewSubmitted) onReviewSubmitted();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to submit review.');
+      setActionError(formatApiError(err, 'Failed to submit review.'));
     } finally {
       setReviewing(false);
     }
@@ -64,18 +84,20 @@ export const SubmissionDetailModal = ({ submissionId, onClose, onRefresh, onRevi
     if (!docMsg.trim()) return;
     try {
       setSendingDocReq(true);
+      setActionError('');
+      setActionSuccess('');
       await createDocumentRequest(data.community_id, {
         submission_id: submissionId,
         message: docMsg.trim(),
         requested_labels: ['Supplementary Verification Proof'],
       });
       setDocMsg('');
-      alert('Verification document request sent to claimant!');
+      setActionSuccess('Verification document request sent to claimant successfully!');
       await fetchDetail();
       if (onRefresh) onRefresh();
       if (onReviewSubmitted) onReviewSubmitted();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to send request.');
+      setActionError(formatApiError(err, 'Failed to send document request.'));
     } finally {
       setSendingDocReq(false);
     }
@@ -84,12 +106,22 @@ export const SubmissionDetailModal = ({ submissionId, onClose, onRefresh, onRevi
   if (!submissionId) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200">
+    <div
+      className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="submission-modal-title"
+        className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Modal Header */}
         <div className="p-6 border-b border-slate-200 flex items-center justify-between bg-slate-50/50 rounded-t-2xl">
           <div className="flex items-center space-x-3">
-            <h2 className="text-xl font-bold text-slate-900">
+            <h2 id="submission-modal-title" className="text-xl font-bold text-slate-900">
               Claim Verification #{submissionId}
             </h2>
             {data && <RiskBadge score={data.risk_score} isFlagged={data.is_flagged} />}
@@ -97,7 +129,8 @@ export const SubmissionDetailModal = ({ submissionId, onClose, onRefresh, onRevi
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"
+            aria-label="Close Claim Verification Modal"
+            className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -107,6 +140,18 @@ export const SubmissionDetailModal = ({ submissionId, onClose, onRefresh, onRevi
         <div className="p-6 overflow-y-auto space-y-6 flex-1">
           {loading && <LoadingSpinner message="Fetching claim details and links..." />}
           {error && <ErrorAlert message={error} onRetry={fetchDetail} />}
+
+          {actionError && (
+            <div role="alert" className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl font-semibold">
+              {actionError}
+            </div>
+          )}
+
+          {actionSuccess && (
+            <div role="status" className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl font-semibold">
+              {actionSuccess}
+            </div>
+          )}
 
           {data && (
             <>
@@ -141,7 +186,7 @@ export const SubmissionDetailModal = ({ submissionId, onClose, onRefresh, onRevi
               <div>
                 <h4 className="text-sm font-bold text-slate-900 mb-3">Household Information</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {data.values.map((v) => {
+                  {(data.values || []).map((v) => {
                     const isRevealed = Boolean(revealedMap[v.id]);
                     const displayValue = isRevealed ? revealedMap[v.id] : v.value;
 
@@ -157,7 +202,7 @@ export const SubmissionDetailModal = ({ submissionId, onClose, onRefresh, onRevi
                           <button
                             onClick={() => handleReveal(v.id)}
                             disabled={revealingId === v.id}
-                            className="text-xs px-2.5 py-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 border border-indigo-200 rounded-lg flex items-center space-x-1"
+                            className="text-xs px-2.5 py-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 border border-indigo-200 rounded-lg flex items-center space-x-1 cursor-pointer"
                             title="Unmask value (logged in Audit Trail)"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -181,7 +226,7 @@ export const SubmissionDetailModal = ({ submissionId, onClose, onRefresh, onRevi
                           <FileText className="w-5 h-5 text-indigo-500" />
                           <div>
                             <p className="text-sm font-semibold text-slate-800">{ev.label}</p>
-                            <p className="text-[11px] text-slate-400 font-mono">SHA: {ev.sha256.slice(0, 12)}...</p>
+                            <p className="text-[11px] text-slate-400 font-mono">SHA: {ev.sha256 ? ev.sha256.slice(0, 12) : ''}...</p>
                           </div>
                         </div>
                         <a
@@ -239,7 +284,7 @@ export const SubmissionDetailModal = ({ submissionId, onClose, onRefresh, onRevi
                   <button
                     onClick={() => handleReviewAction('confirmed', 'approved')}
                     disabled={reviewing}
-                    className="px-3.5 py-2 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center space-x-1.5"
+                    className="px-3.5 py-2 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
                   >
                     <CheckCircle className="w-4 h-4" />
                     <span>Approve Relief Claim</span>
@@ -247,14 +292,14 @@ export const SubmissionDetailModal = ({ submissionId, onClose, onRefresh, onRevi
                   <button
                     onClick={() => handleReviewAction('false_alarm', 'pending')}
                     disabled={reviewing}
-                    className="px-3.5 py-2 text-xs font-semibold bg-slate-700 text-white rounded-lg hover:bg-slate-800"
+                    className="px-3.5 py-2 text-xs font-semibold bg-slate-700 text-white rounded-lg hover:bg-slate-800 cursor-pointer disabled:opacity-50"
                   >
                     Mark Clue as False Alarm
                   </button>
                   <button
                     onClick={() => handleReviewAction('needs_field_visit', 'info_requested')}
                     disabled={reviewing}
-                    className="px-3.5 py-2 text-xs font-semibold bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+                    className="px-3.5 py-2 text-xs font-semibold bg-amber-600 text-white rounded-lg hover:bg-amber-700 cursor-pointer disabled:opacity-50"
                   >
                     Mark for Field Visit
                   </button>
@@ -262,9 +307,12 @@ export const SubmissionDetailModal = ({ submissionId, onClose, onRefresh, onRevi
 
                 {/* Request More Documents */}
                 <form onSubmit={handleCreateDocRequest} className="pt-3 border-t border-slate-200">
-                  <p className="text-xs font-medium text-slate-700 mb-1.5">Request Additional Proof / Documents:</p>
+                  <label htmlFor="doc-request-msg" className="block text-xs font-medium text-slate-700 mb-1.5">
+                    Request Additional Proof / Documents:
+                  </label>
                   <div className="flex space-x-2">
                     <input
+                      id="doc-request-msg"
                       type="text"
                       value={docMsg}
                       onChange={(e) => setDocMsg(e.target.value)}
@@ -274,10 +322,10 @@ export const SubmissionDetailModal = ({ submissionId, onClose, onRefresh, onRevi
                     <button
                       type="submit"
                       disabled={sendingDocReq || !docMsg.trim()}
-                      className="px-3.5 py-2 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center space-x-1"
+                      className="px-3.5 py-2 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center space-x-1 cursor-pointer"
                     >
                       <Send className="w-3.5 h-3.5" />
-                      <span>Request</span>
+                      <span>{sendingDocReq ? 'Sending...' : 'Request'}</span>
                     </button>
                   </div>
                 </form>

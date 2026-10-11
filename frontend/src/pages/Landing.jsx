@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { createCommunity, updateRequiredFields, generateCodes } from '../api/admin';
+import { formatApiError } from '../utils/formatError';
 
 export default function Landing() {
-  const { user, isAdmin, login } = useAuth();
+  const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   // Create Community Wizard Modal State
@@ -18,24 +19,30 @@ export default function Landing() {
   const [adminPos, setAdminPos] = useState('');
   const [createdCodes, setCreatedCodes] = useState([]);
   const [creating, setCreating] = useState(false);
-  const [createdCommunityId, setCreatedCommunityId] = useState(null);
-
-  // Coordinator Authorization Code State (6 digits)
-  const [authDigits, setAuthDigits] = useState(['', '', '', '', '', '']);
-  const [authError, setAuthError] = useState('');
   const [stepError, setStepError] = useState('');
+  const [copiedCodeId, setCopiedCodeId] = useState(null);
 
-  // Clean reset function ensuring no prefilled or inbuilt values
-  const resetWizardFields = () => {
-    setAdminName('');
+  const wizardModalRef = useRef(null);
+
+  // Clean reset function
+  const resetWizardFields = useCallback(() => {
+    setAdminName(user?.name || '');
     setAdminPos('');
     setCommTitle('');
     setCommDesc('');
     setCommRegion('');
     setDisasterDate('');
-    setAuthDigits(['', '', '', '', '', '']);
-    setAuthError('');
     setStepError('');
+  }, [user?.name]);
+
+  const openCreateWizard = () => {
+    resetWizardFields();
+    if (isAdmin) {
+      setWizardStep(2); // Direct to community details for logged-in admin
+    } else {
+      setWizardStep(1); // Sign-in / auth prompt for guest or non-admin
+    }
+    setWizardOpen(true);
   };
 
   // Check URL params for ?action=create
@@ -43,83 +50,55 @@ export default function Landing() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('action') === 'create') {
       resetWizardFields();
+      if (isAdmin) {
+        setWizardStep(2);
+      } else {
+        setWizardStep(1);
+      }
       setWizardOpen(true);
-      setWizardStep(1);
     }
-  }, []);
+  }, [isAdmin, resetWizardFields]);
 
-  const handleAuthDigitChange = (index, value) => {
-    setAuthError('');
-    const val = value.slice(-1);
-    const updated = [...authDigits];
-    updated[index] = val;
-    setAuthDigits(updated);
-
-    if (val && index < 5) {
-      const nextInput = document.getElementById(`auth-digit-${index + 1}`);
-      if (nextInput) nextInput.focus();
+  // Modal accessibility: Escape key to close
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && wizardOpen) {
+        setWizardOpen(false);
+      }
+    };
+    if (wizardOpen) {
+      window.addEventListener('keydown', handleKeyDown);
     }
-  };
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [wizardOpen]);
 
-  const handleAuthKeyDown = (index, e) => {
-    if (e.key === 'Backspace' && !authDigits[index] && index > 0) {
-      const prevInput = document.getElementById(`auth-digit-${index - 1}`);
-      if (prevInput) prevInput.focus();
-    }
-  };
-
-  const handleAuthPaste = (e) => {
-    e.preventDefault();
-    setAuthError('');
-    const pasted = e.clipboardData.getData('text').trim().replace(/[^a-zA-Z0-9]/g, '');
-    if (!pasted) return;
-    const chars = pasted.slice(0, 6).split('');
-    const updated = ['', '', '', '', '', ''];
-    chars.forEach((c, idx) => {
-      if (idx < 6) updated[idx] = c;
-    });
-    setAuthDigits(updated);
-    const targetIdx = Math.min(chars.length, 5);
-    const targetEl = document.getElementById(`auth-digit-${targetIdx}`);
-    if (targetEl) targetEl.focus();
-  };
-
-  const handleVerifyAuthCode = () => {
-    const entered = authDigits.join('').trim().toUpperCase();
-    if (!entered) {
-      setAuthError('Please enter the 6-digit coordinator authorization code.');
-      return;
-    }
-    // Accept valid official coordinator authorization code: 742915 (or demo COORD1 / 742915)
-    if (entered === '742915' || entered === 'COORD1') {
-      setAuthError('');
-      setWizardStep(3);
-    } else {
-      setAuthError('Invalid coordinator authorization code. Please enter the official coordinator authorization code (742915).');
+  const handleCopyCode = async (codeStr, id) => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(codeStr);
+      }
+      setCopiedCodeId(id);
+      setTimeout(() => setCopiedCodeId(null), 2500);
+    } catch {
+      setCopiedCodeId(id);
+      setTimeout(() => setCopiedCodeId(null), 2500);
     }
   };
 
   const handleCreateCommunitySubmit = async () => {
+    if (!isAdmin) {
+      navigate('/login', { state: { from: '/?action=create' } });
+      return;
+    }
+
     try {
       setCreating(true);
       setStepError('');
-
-      // If guest, auto-login with verified admin account so action succeeds smoothly
-      let currentAdminUser = user;
-      if (!currentAdminUser) {
-        try {
-          currentAdminUser = await login('admin@aidnexus.org', 'AidNexus2026!');
-        } catch {
-          navigate('/login?redirect=create');
-          return;
-        }
-      }
 
       const created = await createCommunity({
         title: commTitle.trim(),
         description: commDesc.trim(),
       });
-      setCreatedCommunityId(created.id);
 
       // Define standard required fields
       await updateRequiredFields(created.id, [
@@ -127,19 +106,19 @@ export default function Landing() {
         { label: 'Mobile Phone Number', field_type: 'phone', is_required: true, order: 1 },
         { label: 'Residential Address', field_type: 'address', is_required: true, order: 2 },
         { label: 'Aadhaar / Ration Card', field_type: 'id_number', is_required: true, order: 3 },
-        { label: 'Bank Account Number', field_type: 'bank_account', is_required: true, order: 4 },
+        { label: 'Bank Account Number', field_type: 'bank_account', is_required: false, order: 4 },
         { label: 'House Damage Photo', field_type: 'photo', is_required: true, order: 5 },
       ]);
 
-      // Generate dynamic initial codes for households (no hardcoded mock names)
+      // Generate dynamic initial codes for households
       const initialLabels = Array.from({ length: 4 }, (_, i) => ({
         label: `${commTitle.trim()} - Household #${i + 1}`,
       }));
       const codes = await generateCodes(created.id, initialLabels);
       setCreatedCodes(codes);
-      setWizardStep(6);
+      setWizardStep(4); // Success step
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to create community. Ensure description is at least 10 characters.');
+      setStepError(formatApiError(err, 'Failed to create community. Ensure description is at least 10 characters.'));
     } finally {
       setCreating(false);
     }
@@ -186,11 +165,7 @@ export default function Landing() {
         {/* Main Action Pill Buttons */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-4 pt-4 pb-2 w-full max-w-md sm:max-w-none">
           <button
-            onClick={() => {
-              resetWizardFields();
-              setWizardOpen(true);
-              setWizardStep(1);
-            }}
+            onClick={openCreateWizard}
             className="h-14 px-10 rounded-full bg-[#7a1f3d] hover:bg-[#5c0427] text-white font-body text-base font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
             type="button"
           >
@@ -217,14 +192,6 @@ export default function Landing() {
             <span>Browse Public Schemes</span>
           </Link>
 
-          <Link
-            to="/investigate"
-            className="px-4 py-2 rounded-full bg-[#ffffff] hover:bg-[#dce9ff] text-[#B02A52] font-body text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 border border-[#dac0c4]/40"
-          >
-            <span className="material-symbols-outlined text-[16px]">manage_search</span>
-            <span>Investigator Portal</span>
-          </Link>
-
           {user && (
             <Link
               to="/admin"
@@ -237,19 +204,23 @@ export default function Landing() {
         </div>
 
         {/* Protocol Standard Badge */}
-        <div className="pt-4 flex items-center justify-center gap-2 font-code text-xs text-[#554245]/80">
+        <div className="pt-4 flex items-center justify-center gap-2 font-code text-xs text-[#554245]">
           <span className="material-symbols-outlined text-[#7a1f3d] text-[16px]">verified</span>
-          <span>Verified Registry Standard • Decentralized Direct Triage Protocol</span>
+          <span>Verified Registry Standard • Relief Verification Infrastructure</span>
         </div>
       </div>
 
-      {/* CREATE COMMUNITY MULTI-STEP WIZARD MODAL (Document 4 Specification) */}
+      {/* CREATE COMMUNITY MULTI-STEP WIZARD MODAL */}
       {wizardOpen && (
         <div
           className="fixed inset-0 bg-[#213145]/50 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto"
           onClick={() => setWizardOpen(false)}
         >
           <div
+            ref={wizardModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wizard-modal-title"
             className="bg-[#ffffff] rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl relative my-auto border border-[#dac0c4]/40 flex flex-col max-h-[92vh] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
@@ -261,14 +232,14 @@ export default function Landing() {
                 </div>
                 <div>
                   <span className="font-code text-[11px] text-[#7a1f3d] uppercase tracking-wider font-semibold block">
-                    CIVIL DEFENSE INTAKE
+                    RELIEF PROGRAM INTAKE
                   </span>
-                  <h3 className="font-headline text-lg text-[#5c0427]">Register Relief Community</h3>
+                  <h3 id="wizard-modal-title" className="font-headline text-lg text-[#5c0427]">Register Relief Community</h3>
                 </div>
               </div>
               <button
                 aria-label="Close"
-                className="p-1 rounded-full text-[#554245] hover:bg-[#dce9ff] transition-colors"
+                className="p-1 rounded-full text-[#554245] hover:bg-[#dce9ff] transition-colors cursor-pointer"
                 onClick={() => setWizardOpen(false)}
                 type="button"
               >
@@ -279,10 +250,16 @@ export default function Landing() {
             {/* Stepper Dots */}
             <div className="py-2.5 px-3 bg-[#eff4ff] -mx-6 sm:-mx-8 mb-4 border-b border-[#dac0c4]/20 flex items-center justify-between">
               <span className="font-body text-xs font-semibold text-[#0b1c30]">
-                Step {wizardStep} of 6
+                {wizardStep === 1
+                  ? 'Coordinator Authentication'
+                  : wizardStep === 2
+                  ? 'Community Details'
+                  : wizardStep === 3
+                  ? 'Review & Deploy'
+                  : 'Complete'}
               </span>
               <div className="flex items-center gap-1.5">
-                {[1, 2, 3, 4, 5, 6].map((st) => (
+                {[1, 2, 3, 4].map((st) => (
                   <span
                     key={st}
                     className={`h-1.5 rounded-full transition-all ${
@@ -295,190 +272,107 @@ export default function Landing() {
 
             {/* Modal Body */}
             <div className="flex-1 overflow-y-auto pr-1 space-y-4">
-              {/* Step 1: Sign in / Auth */}
+              {/* Step 1: Coordinator Authentication Prompt (for visitors/non-admins) */}
               {wizardStep === 1 && (
                 <div className="space-y-4">
                   <h4 className="font-headline text-xl text-[#0b1c30]">Coordinator Authentication</h4>
-                  <p className="font-body text-xs text-[#554245] leading-relaxed">
-                    To maintain civil registry integrity, relief community organizers must authenticate or verify their coordinator credentials.
-                  </p>
-                  <div className="space-y-3 pt-2">
-                    <button
-                      onClick={() => {
-                        resetWizardFields();
-                        setWizardStep(2);
-                      }}
-                      className="w-full h-12 rounded-full border border-[#dac0c4] bg-[#ffffff] hover:bg-[#eff4ff] text-[#0b1c30] font-body text-xs font-semibold flex items-center justify-center gap-2.5 transition-colors cursor-pointer shadow-xs"
-                      type="button"
-                    >
-                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
-                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
-                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"></path>
-                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"></path>
-                      </svg>
-                      <span>Continue with Google / Relief SSO</span>
-                    </button>
-                    <div className="flex items-center my-2">
-                      <div className="flex-grow border-t border-[#dac0c4]/40" />
-                      <span className="px-3 text-xs text-[#554245]/60 font-body">or</span>
-                      <div className="flex-grow border-t border-[#dac0c4]/40" />
+
+                  {user && !isAdmin ? (
+                    <div className="p-4 bg-[#ffdad6] text-[#93000a] text-xs rounded-2xl space-y-2 border border-[#ffdad6]">
+                      <p className="font-bold">
+                        Logged in as {user.name} ({user.role})
+                      </p>
+                      <p>
+                        Relief community creation is restricted to verified relief coordinators. Please sign out and sign in with an authorized coordinator account.
+                      </p>
+                      <div className="pt-2 flex gap-2">
+                        <Link
+                          to="/login"
+                          onClick={() => setWizardOpen(false)}
+                          className="px-4 py-2 rounded-full bg-[#7a1f3d] text-white font-bold text-xs hover:bg-[#5c0427]"
+                        >
+                          Switch Account
+                        </Link>
+                      </div>
                     </div>
-                    <Link
-                      to="/login"
-                      className="w-full h-12 rounded-full border border-[#dac0c4] bg-[#ffffff] hover:bg-[#eff4ff] text-[#0b1c30] font-body text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
-                    >
-                      Sign In with Community Admin Account
-                    </Link>
-                  </div>
-                </div>
-              )}
-
-              {/* Step 2: Confirmation / OTP */}
-              {wizardStep === 2 && (
-                <div className="space-y-4 text-center">
-                  <div className="w-12 h-12 rounded-full bg-[#f1dee3] text-[#7a1f3d] flex items-center justify-center mx-auto">
-                    <span className="material-symbols-outlined text-[24px]">verified_user</span>
-                  </div>
-                  <h4 className="font-headline text-xl text-[#0b1c30]">Coordinator Authorization</h4>
-                  <p className="font-body text-xs text-[#554245]">
-                    Enter your 6-digit coordinator verification code to establish this relief jurisdiction.
-                  </p>
-
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#eff4ff] text-[#5c0427] font-code text-xs font-bold border border-[#dac0c4]/30 my-1">
-                    <span className="material-symbols-outlined text-[15px]">key</span>
-                    <span>Coordinator Code: 742915</span>
-                  </div>
-
-                  <div className="flex justify-center gap-2 py-3" onPaste={handleAuthPaste}>
-                    {authDigits.map((digit, i) => (
-                      <input
-                        key={i}
-                        id={`auth-digit-${i}`}
-                        type="text"
-                        maxLength={1}
-                        value={digit}
-                        onChange={(e) => handleAuthDigitChange(i, e.target.value)}
-                        onKeyDown={(e) => handleAuthKeyDown(i, e)}
-                        placeholder="•"
-                        className="w-11 h-12 text-center font-code text-lg font-bold bg-[#eff4ff] text-[#0b1c30] rounded-xl border border-[#dac0c4] focus:outline-none focus:border-[#7a1f3d] focus:bg-white focus:ring-2 focus:ring-[#7a1f3d]/20 transition-all"
-                      />
-                    ))}
-                  </div>
-
-                  {authError && (
-                    <div className="p-3 bg-[#ffdad6] text-[#93000a] text-xs font-semibold rounded-xl text-left flex items-start gap-2">
-                      <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">error</span>
-                      <span>{authError}</span>
-                    </div>
+                  ) : (
+                    <>
+                      <p className="font-body text-xs text-[#554245] leading-relaxed">
+                        To maintain relief integrity and ensure accountable distribution, only authorized relief coordinators can establish new relief programs and issue access tokens.
+                      </p>
+                      <div className="space-y-3 pt-2">
+                        <Link
+                          to="/login"
+                          state={{ from: '/?action=create' }}
+                          onClick={() => setWizardOpen(false)}
+                          className="w-full h-12 rounded-full bg-[#7a1f3d] hover:bg-[#5c0427] text-white font-body text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-md"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">login</span>
+                          <span>Sign In as Relief Coordinator</span>
+                        </Link>
+                        <Link
+                          to="/register"
+                          state={{ from: '/?action=create' }}
+                          onClick={() => setWizardOpen(false)}
+                          className="w-full h-12 rounded-full border border-[#dac0c4] bg-[#ffffff] hover:bg-[#eff4ff] text-[#0b1c30] font-body text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">person_add</span>
+                          <span>Register New Coordinator Account</span>
+                        </Link>
+                      </div>
+                    </>
                   )}
-
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      onClick={() => setWizardStep(1)}
-                      className="h-12 px-5 rounded-full border border-[#dac0c4] text-[#0b1c30] font-body text-xs font-semibold hover:bg-[#eff4ff]"
-                      type="button"
-                    >
-                      Back
-                    </button>
-                    <button
-                      onClick={handleVerifyAuthCode}
-                      className="flex-1 h-12 rounded-full bg-[#7a1f3d] hover:bg-[#5c0427] text-white font-body text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-                      type="button"
-                    >
-                      <span>Verify & Proceed</span>
-                      <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-                    </button>
-                  </div>
                 </div>
               )}
 
-              {/* Step 3: Admin Details */}
-              {wizardStep === 3 && (
+              {/* Step 2: Community Purpose & Scope */}
+              {wizardStep === 2 && (
                 <div className="space-y-3.5">
-                  <h4 className="font-headline text-xl text-[#0b1c30]">1. Coordinator Credentials</h4>
-                  <p className="font-body text-xs text-[#554245]">Provide verified relief coordinator details for civil defense records.</p>
-                  
+                  <h4 className="font-headline text-xl text-[#0b1c30]">Community Details & Scope</h4>
+                  <p className="font-body text-xs text-[#554245]">Specify incident relief mandate, location, and target households.</p>
+
                   {stepError && (
-                    <div className="p-3 bg-[#ffdad6] text-[#93000a] text-xs font-semibold rounded-xl flex items-start gap-2">
+                    <div role="alert" className="p-3 bg-[#ffdad6] text-[#93000a] text-xs font-semibold rounded-xl flex items-start gap-2">
                       <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">error</span>
                       <span>{stepError}</span>
                     </div>
                   )}
 
                   <div>
-                    <label className="block font-body text-xs font-semibold text-[#0b1c30] mb-1">
-                      Lead Coordinator Full Name <span className="text-[#ba1a1a]">*</span>
+                    <label htmlFor="coordinator-name-input" className="block font-body text-xs font-semibold text-[#0b1c30] mb-1">
+                      Lead Coordinator Name <span className="text-[#ba1a1a]">*</span>
                     </label>
                     <input
+                      id="coordinator-name-input"
                       type="text"
                       required
                       value={adminName}
-                      onChange={(e) => {
-                        setAdminName(e.target.value);
-                        setStepError('');
-                      }}
-                      placeholder="Enter lead coordinator full name"
+                      onChange={(e) => setAdminName(e.target.value)}
+                      placeholder="e.g. District Relief Officer"
                       className="w-full h-11 px-3.5 rounded-xl border border-[#dac0c4] font-body text-xs text-[#0b1c30] bg-[#ffffff] focus:outline-none focus:border-[#7a1f3d]"
                     />
                   </div>
+
                   <div>
-                    <label className="block font-body text-xs font-semibold text-[#0b1c30] mb-1">
-                      Official Position / Department
+                    <label htmlFor="coordinator-pos-input" className="block font-body text-xs font-semibold text-[#0b1c30] mb-1">
+                      Official Role / Department (Optional)
                     </label>
                     <input
+                      id="coordinator-pos-input"
                       type="text"
                       value={adminPos}
                       onChange={(e) => setAdminPos(e.target.value)}
-                      placeholder="e.g. Lead District Officer / Relief Coordinator"
+                      placeholder="e.g. Coastal Ward Operations Lead"
                       className="w-full h-11 px-3.5 rounded-xl border border-[#dac0c4] font-body text-xs text-[#0b1c30] bg-[#ffffff] focus:outline-none focus:border-[#7a1f3d]"
                     />
                   </div>
-                  <div className="pt-2 flex gap-2">
-                    <button
-                      onClick={() => setWizardStep(2)}
-                      className="h-12 px-5 rounded-full border border-[#dac0c4] text-[#0b1c30] font-body text-xs font-semibold hover:bg-[#eff4ff]"
-                      type="button"
-                    >
-                      Back
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (!adminName.trim()) {
-                          setStepError('Lead coordinator full name is required.');
-                          return;
-                        }
-                        setStepError('');
-                        setWizardStep(4);
-                      }}
-                      className="flex-1 h-12 rounded-full bg-[#7a1f3d] hover:bg-[#5c0427] text-white font-body text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-                      type="button"
-                    >
-                      <span>Next: Community Purpose</span>
-                      <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Step 4: Community Purpose & Region */}
-              {wizardStep === 4 && (
-                <div className="space-y-3.5">
-                  <h4 className="font-headline text-xl text-[#0b1c30]">2. Community Purpose & Scope</h4>
-                  <p className="font-body text-xs text-[#554245]">Specify incident relief mandate and target households.</p>
-
-                  {stepError && (
-                    <div className="p-3 bg-[#ffdad6] text-[#93000a] text-xs font-semibold rounded-xl flex items-start gap-2">
-                      <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">error</span>
-                      <span>{stepError}</span>
-                    </div>
-                  )}
 
                   <div>
-                    <label className="block font-body text-xs font-semibold text-[#0b1c30] mb-1">
+                    <label htmlFor="community-title-input" className="block font-body text-xs font-semibold text-[#0b1c30] mb-1">
                       Community Title <span className="text-[#ba1a1a]">*</span>
                     </label>
                     <input
+                      id="community-title-input"
                       type="text"
                       required
                       value={commTitle}
@@ -486,15 +380,17 @@ export default function Landing() {
                         setCommTitle(e.target.value);
                         setStepError('');
                       }}
-                      placeholder="e.g. Coastal Ward Relief Hub"
+                      placeholder="e.g. Coastal Ward Flood Relief Hub"
                       className="w-full h-11 px-3.5 rounded-xl border border-[#dac0c4] font-body text-xs text-[#0b1c30] bg-[#ffffff] focus:outline-none focus:border-[#7a1f3d]"
                     />
                   </div>
+
                   <div>
-                    <label className="block font-body text-xs font-semibold text-[#0b1c30] mb-1">
+                    <label htmlFor="community-desc-input" className="block font-body text-xs font-semibold text-[#0b1c30] mb-1">
                       Operational Mandate / Description <span className="text-[#ba1a1a]">*</span>
                     </label>
                     <textarea
+                      id="community-desc-input"
                       rows={3}
                       required
                       value={commDesc}
@@ -502,14 +398,16 @@ export default function Landing() {
                         setCommDesc(e.target.value);
                         setStepError('');
                       }}
-                      placeholder="State operational mandate, incident context, and target households (minimum 10 characters)..."
+                      placeholder="State operational mandate, incident context, and eligible households (minimum 10 characters)..."
                       className="w-full p-3 rounded-xl border border-[#dac0c4] font-body text-xs text-[#0b1c30] bg-[#ffffff] focus:outline-none focus:border-[#7a1f3d]"
                     />
                   </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block font-body text-xs font-semibold text-[#0b1c30] mb-1">Region / Zone</label>
+                      <label htmlFor="region-select" className="block font-body text-xs font-semibold text-[#0b1c30] mb-1">Region / Zone</label>
                       <select
+                        id="region-select"
                         value={commRegion}
                         onChange={(e) => setCommRegion(e.target.value)}
                         className="w-full h-11 px-3 rounded-xl border border-[#dac0c4] font-body text-xs text-[#0b1c30] bg-[#ffffff] focus:outline-none focus:border-[#7a1f3d]"
@@ -526,8 +424,9 @@ export default function Landing() {
                       </select>
                     </div>
                     <div>
-                      <label className="block font-body text-xs font-semibold text-[#0b1c30] mb-1">Disaster Incident Date</label>
+                      <label htmlFor="disaster-date-input" className="block font-body text-xs font-semibold text-[#0b1c30] mb-1">Incident Date</label>
                       <input
+                        id="disaster-date-input"
                         type="date"
                         value={disasterDate}
                         onChange={(e) => setDisasterDate(e.target.value)}
@@ -535,13 +434,14 @@ export default function Landing() {
                       />
                     </div>
                   </div>
+
                   <div className="pt-2 flex gap-2">
                     <button
-                      onClick={() => setWizardStep(3)}
-                      className="h-12 px-5 rounded-full border border-[#dac0c4] text-[#0b1c30] font-body text-xs font-semibold hover:bg-[#eff4ff]"
+                      onClick={() => setWizardOpen(false)}
+                      className="h-12 px-5 rounded-full border border-[#dac0c4] text-[#0b1c30] font-body text-xs font-semibold hover:bg-[#eff4ff] cursor-pointer"
                       type="button"
                     >
-                      Back
+                      Cancel
                     </button>
                     <button
                       onClick={() => {
@@ -554,22 +454,30 @@ export default function Landing() {
                           return;
                         }
                         setStepError('');
-                        setWizardStep(5);
+                        setWizardStep(3);
                       }}
                       className="flex-1 h-12 rounded-full bg-[#7a1f3d] hover:bg-[#5c0427] text-white font-body text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                       type="button"
                     >
-                      <span>Next: Review & Deploy</span>
+                      <span>Review & Deploy</span>
                       <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Step 5: Review & Deploy */}
-              {wizardStep === 5 && (
+              {/* Step 3: Review & Deploy */}
+              {wizardStep === 3 && (
                 <div className="space-y-4">
-                  <h4 className="font-headline text-xl text-[#0b1c30]">Review & Deploy Community</h4>
+                  <h4 className="font-headline text-xl text-[#0b1c30]">Review & Deploy Program</h4>
+
+                  {stepError && (
+                    <div role="alert" className="p-3 bg-[#ffdad6] text-[#93000a] text-xs font-semibold rounded-xl flex items-start gap-2">
+                      <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">error</span>
+                      <span>{stepError}</span>
+                    </div>
+                  )}
+
                   <div className="p-4 rounded-2xl bg-[#eff4ff] border border-[#dac0c4]/40 space-y-2 text-xs">
                     <div className="flex justify-between border-b border-[#dac0c4]/20 pb-1.5">
                       <span className="text-[#554245]">Community Title:</span>
@@ -578,7 +486,7 @@ export default function Landing() {
                     <div className="flex justify-between border-b border-[#dac0c4]/20 pb-1.5">
                       <span className="text-[#554245]">Coordinator:</span>
                       <span className="font-semibold text-[#0b1c30]">
-                        {adminName} {adminPos ? `(${adminPos})` : ''}
+                        {adminName || user?.name} {adminPos ? `(${adminPos})` : ''}
                       </span>
                     </div>
                     <div className="flex justify-between border-b border-[#dac0c4]/20 pb-1.5">
@@ -593,21 +501,21 @@ export default function Landing() {
                     )}
                     <div className="pt-2">
                       <span className="font-semibold text-[#5c0427] block mb-1">Standard Intake Form Fields:</span>
-                      <span className="text-[#554245]">Full Name, Phone Number, Residential Address, Aadhaar / ID, Bank Account / UPI, House Damage Photo</span>
+                      <span className="text-[#554245]">Head of Household Name, Phone Number, Residential Address, Aadhaar / ID, Bank Account Number, House Damage Photo</span>
                     </div>
                   </div>
 
-                  <div className="p-3 bg-[#f1dee3]/60 rounded-xl flex items-start gap-2 text-xs text-[#554245]">
+                  <div className="p-3 bg-[#eff4ff] rounded-xl flex items-start gap-2 text-xs text-[#554245] border border-[#dac0c4]/30">
                     <span className="material-symbols-outlined text-[18px] text-[#7a1f3d] shrink-0 mt-0.5">verified_user</span>
                     <p>
-                      AidNexus Privacy Shield guarantee active: individual household records are encrypted and never exposed publicly.
+                      AidNexus maintains strict data confidentiality: individual claimant records and damage proof are accessible only to authorized relief coordinators.
                     </p>
                   </div>
 
                   <div className="flex gap-2 pt-2">
                     <button
-                      onClick={() => setWizardStep(4)}
-                      className="h-12 px-5 rounded-full border border-[#dac0c4] text-[#0b1c30] font-body text-xs font-semibold hover:bg-[#eff4ff]"
+                      onClick={() => setWizardStep(2)}
+                      className="h-12 px-5 rounded-full border border-[#dac0c4] text-[#0b1c30] font-body text-xs font-semibold hover:bg-[#eff4ff] cursor-pointer"
                       type="button"
                     >
                       Back
@@ -619,21 +527,21 @@ export default function Landing() {
                       type="button"
                     >
                       <span className="material-symbols-outlined text-[18px]">rocket_launch</span>
-                      <span>{creating ? 'Deploying Community...' : 'Publish Relief Community'}</span>
+                      <span>{creating ? 'Publishing Relief Community...' : 'Publish Relief Community'}</span>
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Step 6: Generated Codes */}
-              {wizardStep === 6 && (
+              {/* Step 4: Generated Codes & Completion */}
+              {wizardStep === 4 && (
                 <div className="space-y-4 text-center">
                   <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
                     <span className="material-symbols-outlined text-[26px]">check_circle</span>
                   </div>
                   <h4 className="font-headline text-2xl text-[#0b1c30]">Community Created!</h4>
                   <p className="font-body text-xs text-[#554245]">
-                    Single-use access tokens have been minted for distribution to households.
+                    Single-use access tokens have been minted for distribution to households in this jurisdiction.
                   </p>
 
                   <div className="rounded-2xl border border-[#dac0c4]/40 overflow-hidden text-left text-xs">
@@ -647,30 +555,35 @@ export default function Landing() {
                           <span className="font-bold text-[#5c0427]">{c.code}</span>
                           <span className="text-[#554245]">{c.issued_to_label || 'Household'}</span>
                           <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(c.code);
-                              alert(`Code ${c.code} copied!`);
-                            }}
-                            className="px-2 py-0.5 rounded bg-[#dce9ff] text-[#0b1c30] hover:bg-[#d3e4fe] font-body text-[11px]"
+                            type="button"
+                            onClick={() => handleCopyCode(c.code, c.id)}
+                            className="px-2.5 py-1 rounded-full bg-[#dce9ff] text-[#0b1c30] hover:bg-[#cbdbf5] font-body text-[11px] font-semibold cursor-pointer"
                           >
-                            Copy
+                            {copiedCodeId === c.id ? 'Copied!' : 'Copy'}
                           </button>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  <div className="pt-2">
+                  <div className="pt-2 flex flex-col gap-2">
                     <button
                       onClick={() => {
                         setWizardOpen(false);
                         navigate('/admin');
                       }}
-                      className="w-full h-12 rounded-full bg-[#7a1f3d] hover:bg-[#5c0427] text-white font-body text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2"
+                      className="w-full h-12 rounded-full bg-[#7a1f3d] hover:bg-[#5c0427] text-white font-body text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                       type="button"
                     >
                       <span className="material-symbols-outlined text-[18px]">dashboard</span>
                       <span>Go to Admin Dashboard</span>
+                    </button>
+                    <button
+                      onClick={() => setWizardOpen(false)}
+                      className="w-full h-10 rounded-full border border-[#dac0c4]/60 text-[#554245] hover:bg-[#eff4ff] font-body text-xs font-semibold cursor-pointer"
+                      type="button"
+                    >
+                      Close
                     </button>
                   </div>
                 </div>
